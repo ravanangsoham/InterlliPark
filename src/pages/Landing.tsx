@@ -20,7 +20,7 @@ export default function Landing() {
           <Car size={56} strokeWidth={3} />
         </div>
         <div className="space-y-4">
-          <h1 className="text-7xl font-display font-black text-black tracking-tighter">
+          <h1 className="text-7xl font-display font-black tracking-tighter">
             Intelli<span className="text-brand-primary">Park</span>
           </h1>
           <div className="flex items-center justify-center gap-3">
@@ -29,7 +29,7 @@ export default function Landing() {
             <div className="h-px w-12 bg-brand-primary/40" />
           </div>
         </div>
-        <p className="text-black max-w-sm mx-auto font-black text-lg leading-relaxed opacity-90">
+        <p className="max-w-sm mx-auto font-black text-lg leading-relaxed opacity-90">
           Next-generation infrastructure management powered by neural-linked artificial intelligence.
         </p>
       </motion.div>
@@ -57,12 +57,12 @@ export default function Landing() {
           className="group flex items-center gap-3 mx-auto px-6 py-3 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all active:scale-95"
         >
           <div className="w-2 h-2 rounded-full bg-brand-primary animate-pulse" />
-          <span className="text-[11px] font-bold text-black group-hover:text-brand-primary uppercase tracking-[0.2em] transition-colors">Administrator Portal</span>
+          <span className="text-[11px] font-bold group-hover:text-brand-primary uppercase tracking-[0.2em] transition-colors">Administrator Portal</span>
         </button>
         <div className="flex flex-col items-center gap-2 opacity-30">
           <div className="flex items-center gap-2">
             <Sparkles size={12} className="text-brand-primary" />
-            <p className="text-[9px] font-bold text-black uppercase tracking-[0.3em]">Neural Exchange Protocol</p>
+            <p className="text-[9px] font-bold uppercase tracking-[0.3em]">Neural Exchange Protocol</p>
           </div>
         </div>
       </footer>
@@ -90,7 +90,7 @@ function LandingCard({ title, desc, icon, onClick, variant }: any) {
       </div>
       <div className="space-y-3">
         <h3 className={`text-3xl font-display font-black tracking-tight ${isPrimary ? 'text-white' : 'text-black'}`}>{title}</h3>
-        <p className={`text-[13px] font-black max-w-[200px] leading-relaxed uppercase tracking-widest ${isPrimary ? 'text-slate-400' : 'text-black'}`}>{desc}</p>
+        <p className={`text-[13px] font-black max-w-[200px] leading-relaxed uppercase tracking-widest ${isPrimary ? 'text-slate-500' : 'text-slate-950'}`}>{desc}</p>
       </div>
       <div className={`absolute -bottom-12 -right-12 w-48 h-48 rounded-full blur-[80px] opacity-30 ${isPrimary ? 'bg-brand-primary' : 'bg-brand-primary/20'}`} />
     </motion.button>

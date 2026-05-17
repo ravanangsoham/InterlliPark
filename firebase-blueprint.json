@@ -7,6 +7,7 @@
       "properties": {
         "email": { "type": "string" },
         "role": { "type": "string", "enum": ["user", "admin"] },
+        "isBlocked": { "type": "boolean" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["email", "role"]
@@ -20,7 +21,8 @@
         "floor": { "type": "number" },
         "number": { "type": "string" },
         "type": { "type": "string", "enum": ["Bike", "4-Wheeler", "Tempo", "Truck"] },
-        "status": { "type": "string", "enum": ["available", "reserved", "occupied", "blocked"] },
+        "status": { "type": "string", "enum": ["available", "reserved", "occupied", "blocked", "maintenance", "out_of_service"] },
+        "blockMetadata": { "type": "object" },
         "currentBookingId": { "type": "string" }
       },
       "required": ["locationId", "floor", "number", "type", "status"]

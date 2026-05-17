@@ -1,0 +1,41 @@
+src/pages/Slots.tsx:42:            key={`slots-floor-switch-${f}`}
+src/pages/Slots.tsx:66:                  key={`slots-page-item-${slot.id}-${idx}`}
+src/pages/History.tsx:118:                key={`history-ticket-${ticket.id}-${idx}`}
+src/pages/Support.tsx:135:            <div key={`faq-${idx}-${faq.q.slice(0, 10)}`} className="glass-morphism rounded-2xl overflow-hidden shadow-sm border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900">
+src/pages/Support.tsx:202:                  key={`support-msg-${msg.id}-${idx}`}
+src/pages/Admin.tsx:888:                key={`tab-btn-${tab}`}
+src/pages/Admin.tsx:934:            key="overview"
+src/pages/Admin.tsx:963:                               <div key={`traffic-${v.id}-${vIdx}`} className="flex items-center justify-between p-5 bg-white dark:bg-white/5 rounded-[2rem] border border-slate-100 dark:border-white/5 group transition-all hover:shadow-lg">
+src/pages/Admin.tsx:1045:          key="feeds"
+src/pages/Admin.tsx:1065:                    <div key={`cam-feed-${camId}`} className="relative group rounded-[2rem] overflow-hidden border-2 border-white/10 shadow-xl bg-black">
+src/pages/Admin.tsx:1102:          key="inquiries"
+src/pages/Admin.tsx:1122:                      key={`chat-user-item-${chat.userId}-${idx}`}
+src/pages/Admin.tsx:1158:            key="slots"
+src/pages/Admin.tsx:1244:                                  key={`floor-btn-${floor}-${fIdx}`}
+src/pages/Admin.tsx:1262:                         <div key={`slot-grid-${s.id}-${sIdx}`} className="relative group">
+src/pages/Admin.tsx:1337:                        <div key={`recent-activity-${b.id}-${idx}`} className="flex items-center justify-between p-4 bg-white dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/5 group transition-all hover:border-brand-primary/30">
+src/pages/Admin.tsx:1411:            key="revenue"
+src/pages/Admin.tsx:1470:                                   <tr key={`audit-row-${b.id || bIdx}-${bIdx}`} className="border-t border-slate-100 dark:border-white/5 text-slate-900">
+src/pages/Admin.tsx:1591:                                    <Cell key={`pie-cell-${entry.name}-${index}`} fill={entry.color} />
+src/pages/Admin.tsx:1599:                                 <div key={`pie-v-legend-${idx}`} className="flex items-center gap-2">
+src/pages/Admin.tsx:1634:            key="users"
+src/pages/Admin.tsx:1682:                  <div key={`user-card-${u.id}-${uIdx}`} className="flex items-center justify-between p-6 bg-white dark:bg-slate-900/40 rounded-[2.5rem] border border-slate-200 dark:border-white/10 group transition-all hover:border-brand-primary/40 hover:shadow-xl dark:hover:shadow-brand-primary/5">
+src/pages/Admin.tsx:1777:            key="sensors"
+src/pages/Admin.tsx:1801:                           <div key={`iot-sensor-${s.name}-${i}`} className="space-y-1">
+src/pages/Admin.tsx:1894:                  <div key={`msg-item-${msg.id || idx}-${idx}`} className={`flex ${msg.isAdmin ? 'justify-end' : 'justify-start'}`}>
+src/pages/Admin.tsx:1960:                          key={`offline-form-type-${type}-${tIdx}`}
+src/pages/Admin.tsx:2102:                                 <div key={`modal-slot-${id}`} className="w-8 h-8 rounded-lg bg-brand-primary/20 border border-brand-primary/40 flex items-center justify-center text-[10px] font-black text-brand-primary">
+src/pages/Admin.tsx:2197:                                    key={`dur-opt-${dur.val}`}
+src/pages/Locations.tsx:45:            key={`location-card-${location.id}-${idx}`}
+src/pages/Home.tsx:417:            key="details"
+src/pages/Home.tsx:568:            key="allocation"
+src/pages/Home.tsx:582:                      key={`floor-choice-${f}`}
+src/pages/Home.tsx:607:                            key={`ai-allocation-slot-${slot.id}-${idx}`}
+src/pages/Home.tsx:707:            key="duration"
+src/pages/Home.tsx:721:                  key={`duration-opt-${h}`}
+src/pages/Home.tsx:771:            key="confirmation"
+src/pages/Home.tsx:840:            key="payment"
+src/pages/Home.tsx:865:                              <div key={`payment-qr-placeholder-${i}`} className="w-9 h-9 rounded bg-brand-primary shadow-lg shadow-brand-primary/20" />
+src/pages/Home.tsx:923:            key="success"
+src/pages/Home.tsx:1068:                      <div key={`ai-logic-feature-${i}`} className="p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/5">
+src/pages/Vehicles.tsx:90:              key={`vehicle-item-${v.id}-${idx}`}

@@ -25,7 +25,7 @@ import { db, OperationType, handleFirestoreError } from './lib/firebase';
 import { collection, query, where, onSnapshot, orderBy, limit, getDocs, setDoc, doc } from 'firebase/firestore';
 
 function ProtectedRoute({ children, role, maintenanceMode }: { children: React.ReactNode, role?: 'user' | 'admin', maintenanceMode?: boolean }) {
-  const { user, role: userRole, loading } = useAuth();
+  const { user, role: userRole, isBlocked, loading } = useAuth();
   
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-background-deep transition-colors">
@@ -40,6 +40,34 @@ function ProtectedRoute({ children, role, maintenanceMode }: { children: React.R
   );
   
   if (!user) return <Navigate to="/landing" replace />;
+
+  if (isBlocked && userRole !== 'admin') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-red-950 text-white p-8 text-center ring-inset ring-8 ring-red-500/20">
+        <div className="max-w-md space-y-8 animate-in fade-in zoom-in duration-500">
+          <div className="w-24 h-24 bg-red-500/10 rounded-[2.5rem] flex items-center justify-center text-red-500 mx-auto border border-red-500/20 shadow-2xl shadow-red-500/10">
+            <Activity size={48} className="animate-pulse" />
+          </div>
+          <div className="space-y-4">
+            <h1 className="text-4xl font-display font-black tracking-tighter">ACCESS_REVOKED</h1>
+            <p className="text-red-200/60 font-medium leading-relaxed">
+              Your digital signature has been flagged for administrative review. Grid access is temporarily suspended.
+            </p>
+          </div>
+          <div className="p-6 bg-white/5 rounded-3xl border border-white/10 space-y-2">
+            <p className="text-[10px] font-black uppercase tracking-[0.4em] text-red-400">Protocol Status</p>
+            <p className="text-xl font-display font-bold">TERMINATED</p>
+          </div>
+          <button 
+            onClick={() => window.location.href = '/support'} 
+            className="px-8 py-4 bg-white/10 hover:bg-white/20 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
+          >
+            Appeal Restriction
+          </button>
+        </div>
+      </div>
+    );
+  }
   
   if (maintenanceMode && userRole !== 'admin') {
     return (
@@ -81,18 +109,23 @@ export default function App() {
 
   // Maintenance mode listener
   useEffect(() => {
+    if (!user) return;
     const unsubscribe = onSnapshot(doc(db, 'settings', 'system'), (snapshot) => {
       if (snapshot.exists()) {
         setMaintenanceMode(snapshot.data().maintenanceMode || false);
       }
+    }, (error) => {
+      console.error("Maintenance mode sync error:", error);
     });
     return unsubscribe;
-  }, []);
+  }, [user]);
 
   // Seed slots if empty specifically for active location
   useEffect(() => {
     async function seedSlots() {
-      if (!user || isSeeding || role !== 'admin') return; // Only seed if admin is logged in
+      // Seed if no slots exist for active location. 
+      // For demo purposes, we allow any logged in user to trigger initial seed if grid is empty.
+      if (!user || isSeeding) return; 
       setIsSeeding(true);
       try {
         // Fetch a small batch of slots to check existence

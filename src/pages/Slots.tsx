@@ -26,7 +26,7 @@ export default function Slots({ activeLocation, slots: allSlots }: { activeLocat
       className="space-y-6"
     >
       <header className="px-1 text-center">
-        <h1 className="text-2xl font-display font-black text-black uppercase tracking-tight">Virtual Grid</h1>
+        <h1 className="text-2xl font-display font-black text-black dark:text-white uppercase tracking-tight">Virtual Grid</h1>
         <p className="text-brand-primary text-sm font-black uppercase tracking-widest leading-none mt-1">{activeLocation.name}</p>
       </header>
 
@@ -39,7 +39,7 @@ export default function Slots({ activeLocation, slots: allSlots }: { activeLocat
       <div className="flex gap-2 mb-4">
         {Array.from({ length: activeLocation.floors || 2 }, (_, i) => i + 1).map(f => (
           <button 
-            key={f}
+            key={`slots-floor-switch-${f}`}
             onClick={() => setActiveFloor(f)}
             className={`flex-1 py-3 rounded-xl font-display font-black text-sm transition-all uppercase tracking-widest ${
               activeFloor === f 
@@ -59,11 +59,11 @@ export default function Slots({ activeLocation, slots: allSlots }: { activeLocat
               const isSelected = selectedSlot === slot.id;
               const isAvailable = slot.status === 'available';
               const isOccupied = slot.status === 'occupied';
-              const isBlocked = slot.status === 'blocked';
+              const isBlocked = ['blocked', 'maintenance', 'out_of_service'].includes(slot.status);
 
               return (
                 <motion.button
-                  key={slot.id}
+                  key={`slots-page-item-${slot.id}-${idx}`}
                   disabled={isOccupied || isBlocked}
                   onClick={() => setSelectedSlot(isSelected ? null : slot.id)}
                   initial={{ opacity: 0, scale: 0.9 }}
@@ -81,8 +81,8 @@ export default function Slots({ activeLocation, slots: allSlots }: { activeLocat
                 >
                   <div className="flex flex-col items-center justify-center">
                     {isBlocked ? <X size={18} strokeWidth={3} /> : 
-                     slot.type === 'Bike' ? <Bike size={18} /> : 
-                     slot.type === 'Truck' ? <Truck size={18} /> : 
+                     (slot.currentVehicleType || slot.type) === 'Bike' ? <Bike size={18} /> : 
+                     (slot.currentVehicleType || slot.type) === 'Truck' ? <Truck size={18} /> : 
                      <Car size={18} />}
                   </div>
                   
@@ -111,7 +111,7 @@ export default function Slots({ activeLocation, slots: allSlots }: { activeLocat
 
       <div className="flex items-center justify-center gap-2 pt-4 opacity-50">
          <div className="w-1.5 h-1.5 rounded-full bg-brand-primary animate-pulse" />
-         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em]">Live Floor Data Synchronized</p>
+         <p className="text-[10px] text-slate-600 dark:text-slate-400 font-black uppercase tracking-[0.2em]">Live Floor Data Synchronized</p>
       </div>
     </motion.div>
   );
@@ -122,7 +122,7 @@ function LegendItem({ color, label }: { color: string; label: string }) {
   return (
     <div className="flex items-center gap-2.5 px-3 py-1.5 bg-slate-100 dark:bg-white/5 rounded-full border border-slate-200 dark:border-white/10">
       <div className={`w-3 h-3 rounded-full ${color} shadow-sm border border-white/20`} />
-      <span className="text-[11px] font-black text-slate-950 uppercase tracking-widest leading-none">{label}</span>
+      <span className="text-[11px] font-black text-slate-950 dark:text-white uppercase tracking-widest leading-none">{label}</span>
     </div>
   );
 }

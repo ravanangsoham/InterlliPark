@@ -37,7 +37,7 @@ export default function Settings({ savedVehicles = [] }: { savedVehicles?: Vehic
       className="space-y-8 pb-10"
     >
       <header className="px-2 pt-2">
-        <h1 className="text-3xl font-display font-bold text-slate-900 tracking-tight transition-colors">Settings</h1>
+        <h1 className="text-3xl font-display font-bold text-slate-900 dark:text-white tracking-tight transition-colors">Settings</h1>
       </header>
 
       {/* Profile Section */}
@@ -46,7 +46,7 @@ export default function Settings({ savedVehicles = [] }: { savedVehicles?: Vehic
             {getInitials(user?.displayName || user?.email)}
          </div>
          <div className="space-y-1">
-            <h3 className="text-2xl font-display font-bold text-slate-900 leading-tight transition-colors">
+            <h3 className="text-2xl font-display font-bold text-slate-900 dark:text-white leading-tight transition-colors">
                {user?.displayName || (user?.email?.split('@')[0]) || 'User Account'}
             </h3>
             <p className="text-sm text-slate-500 font-medium">{user?.email || 'user@example.com'}</p>
@@ -117,7 +117,7 @@ export default function Settings({ savedVehicles = [] }: { savedVehicles?: Vehic
               className="bg-white dark:bg-slate-900 max-w-md w-full rounded-[3rem] p-8 space-y-6 shadow-2xl border border-slate-200 dark:border-white/10"
             >
               <div className="flex justify-between items-center">
-                <h3 className="text-xl font-display font-bold text-slate-900">About IntelliPark</h3>
+                <h3 className="text-xl font-display font-bold text-slate-900 dark:text-white">About IntelliPark</h3>
                 <button onClick={() => setShowAbout(false)} className="p-2 text-slate-400 hover:text-brand-primary"><Smartphone size={20} /></button>
               </div>
               <div className="space-y-4 text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
@@ -144,7 +144,7 @@ export default function Settings({ savedVehicles = [] }: { savedVehicles?: Vehic
               className="bg-white dark:bg-slate-900 max-w-md w-full rounded-[3rem] p-8 space-y-6 shadow-2xl border border-slate-200 dark:border-white/10 max-h-[80vh] overflow-y-auto"
             >
               <div className="flex justify-between items-center">
-                <h3 className="text-xl font-display font-bold text-slate-900">Privacy Protocol</h3>
+                <h3 className="text-xl font-display font-bold text-slate-900 dark:text-white">Privacy Protocol</h3>
                 <button onClick={() => setShowPrivacy(false)} className="p-2 text-slate-400 hover:text-brand-primary"><Shield size={20} /></button>
               </div>
               <div className="space-y-4 text-sm text-slate-600 dark:text-slate-400 leading-relaxed text-left">
@@ -216,7 +216,7 @@ function SettingsToggle({
         {icon}
       </div>
       <div className="flex-1 text-left">
-        <h4 className="font-display font-bold text-slate-900 tracking-tight leading-none mb-1.5 text-base transition-colors">
+        <h4 className="font-display font-bold text-slate-900 dark:text-white tracking-tight leading-none mb-1.5 text-base transition-colors">
           {label}
         </h4>
         <p className="text-[11px] text-slate-500 font-medium">{sub}</p>
@@ -253,7 +253,7 @@ function SettingsLink({
         {icon}
       </div>
       <div className="flex-1 text-left">
-        <h4 className="font-display font-bold text-slate-700 group-hover:text-slate-900 tracking-tight text-base transition-colors">
+        <h4 className="font-display font-bold text-slate-700 dark:text-white group-hover:text-slate-900 tracking-tight text-base transition-colors">
           {label}
         </h4>
       </div>

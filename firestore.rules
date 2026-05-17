@@ -11,7 +11,7 @@ service cloud.firestore {
     function isVerified() { return isSignedIn(); }
     function isDev() {
       return isSignedIn() && (
-        request.auth.token.email in [
+        request.auth.token.email.lower() in [
           'ravanangsoham2007@gmail.com',
           'ravanangsoham@gmail.com',
           'sanika7777@gmail.com',
@@ -23,13 +23,20 @@ service cloud.firestore {
       );
     }
     function isAdmin() { 
+      let uid = request.auth.uid;
       return isDev() || (
         isSignedIn() && 
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        exists(/databases/$(database)/documents/users/$(uid)) && 
+        get(/databases/$(database)/documents/users/$(uid)).data.get('role', 'user') == 'admin'
       ); 
     }
     function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isNotBlocked() {
+      let uid = request.auth.uid;
+      return !isSignedIn() || 
+             !exists(/databases/$(database)/documents/users/$(uid)) || 
+             get(/databases/$(database)/documents/users/$(uid)).data.get('isBlocked', false) == false;
+    }
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
     function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
@@ -44,7 +51,8 @@ service cloud.firestore {
       return data.locationId is string && 
              data.number is string && 
              data.type is string && 
-             data.status in ['available', 'reserved', 'occupied', 'blocked'] &&
+             data.status in ['available', 'reserved', 'occupied', 'blocked', 'maintenance', 'out_of_service'] &&
+             (!('blockMetadata' in data) || data.blockMetadata is map) &&
              data.updatedAt == request.time;
     }
 
@@ -77,14 +85,14 @@ service cloud.firestore {
       allow get: if isOwner(userId) || isAdmin();
       allow list: if isAdmin();
       allow create: if isSignedIn() && isOwner(userId) && isValidUser(incoming());
-      allow update: if isOwner(userId) || isAdmin(); // Allow updates for owners/admins
+      allow update: if isNotBlocked() && (isOwner(userId) || isAdmin());
       allow delete: if isAdmin();
     }
 
     match /slots/{slotId} {
       allow get, list: if isSignedIn();
       allow create: if isAdmin();
-      allow update: if isSignedIn() && (
+      allow update: if isNotBlocked() && isSignedIn() && (
         isAdmin() || 
         (incoming().diff(existing()).affectedKeys().hasOnly(['status', 'currentBookingId', 'updatedAt']) &&
          incoming().updatedAt == request.time)
@@ -94,8 +102,8 @@ service cloud.firestore {
     match /bookings/{bookingId} {
       allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
       allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && isValidBooking(incoming()) && incoming().createdAt == request.time;
-      allow update: if isSignedIn() && (
+      allow create: if isNotBlocked() && isSignedIn() && isValidBooking(incoming()) && incoming().createdAt == request.time;
+      allow update: if isNotBlocked() && isSignedIn() && (
         isAdmin() || 
         (isOwner(existing().userId) && 
          incoming().diff(existing()).affectedKeys().hasOnly(['paymentStatus', 'status', 'endTime', 'startTime', 'arrivalTime', 'totalAmount', 'paymentMethod', 'updatedAt', 'userArrived']) &&
@@ -107,15 +115,15 @@ service cloud.firestore {
     match /vehicles/{vehicleId} {
       allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
       allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isVerified() && isValidVehicle(incoming()) && incoming().createdAt == request.time;
-      allow update: if isVerified() && isOwner(existing().userId) && isValidVehicle(incoming()) && incoming().createdAt == existing().createdAt;
+      allow create: if isNotBlocked() && isVerified() && isValidVehicle(incoming()) && incoming().createdAt == request.time;
+      allow update: if isNotBlocked() && isVerified() && isOwner(existing().userId) && isValidVehicle(incoming()) && incoming().createdAt == existing().createdAt;
       allow delete: if isVerified() && (isOwner(existing().userId) || isAdmin());
     }
 
     match /support_messages/{messageId} {
-      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isVerified() && isValidMessage(incoming());
+      allow list: if isSignedIn() && (isAdmin() || (resource.data.userId == request.auth.uid));
+      allow get: if isSignedIn() && (isAdmin() || (resource.data.userId == request.auth.uid));
+      allow create: if isNotBlocked() && isVerified() && isValidMessage(incoming());
     }
 
     match /settings/{settingId} {

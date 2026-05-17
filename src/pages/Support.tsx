@@ -51,8 +51,7 @@ export default function Support() {
 
     const q = query(
       collection(db, 'support_messages'),
-      where('userId', '==', user.uid),
-      orderBy('timestamp', 'asc')
+      where('userId', '==', user.uid)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -60,6 +59,12 @@ export default function Support() {
         id: doc.id,
         ...doc.data()
       })) as Message[];
+      // Sort client-side to avoid index requirements
+      msgs.sort((a, b) => {
+        const tA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.timestamp instanceof Date ? a.timestamp.getTime() : 0);
+        const tB = b.timestamp?.toMillis ? b.timestamp.toMillis() : (b.timestamp instanceof Date ? b.timestamp.getTime() : 0);
+        return tA - tB;
+      });
       setMessages(msgs);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'support_messages');
@@ -124,10 +129,10 @@ export default function Support() {
       </div>
 
       <section className="space-y-4 px-2">
-        <h2 className="text-lg font-display font-black text-black transition-colors uppercase tracking-tight">Frequently Asked Questions</h2>
+        <h2 className="text-lg font-display font-black text-black dark:text-white transition-colors uppercase tracking-tight">Frequently Asked Questions</h2>
         <div className="space-y-3">
           {FAQS.map((faq, idx) => (
-            <div key={idx} className="glass-morphism rounded-2xl overflow-hidden shadow-sm border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900">
+            <div key={`faq-${idx}-${faq.q.slice(0, 10)}`} className="glass-morphism rounded-2xl overflow-hidden shadow-sm border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900">
               <button 
                 onClick={() => setOpenIdx(openIdx === idx ? null : idx)}
                 className="w-full flex items-center justify-between p-5 text-left transition-colors"
@@ -192,9 +197,9 @@ export default function Support() {
                   <p className="text-sm font-medium text-slate-500">Initiate link for assistance.</p>
                 </div>
               )}
-              {messages.map((msg) => (
+              {messages.map((msg, idx) => (
                 <div 
-                  key={msg.id}
+                  key={`support-msg-${msg.id}-${idx}`}
                   className={`flex ${msg.isAdmin ? 'justify-start' : 'justify-end'}`}
                 >
                   <div className={`max-w-[80%] p-4 rounded-2xl text-sm font-medium ${
@@ -248,8 +253,8 @@ function ContactCard({ icon, label, sub, onClick }: { icon: React.ReactNode; lab
         {icon}
       </div>
       <div className="text-center">
-        <span className="block text-[10px] font-black text-black group-hover:text-black dark:group-hover:text-white transition-colors uppercase tracking-widest leading-none mb-1">{label}</span>
-        <span className="text-[9px] text-black/60 font-black tracking-tight truncate max-w-full">{sub}</span>
+        <span className="block text-[10px] font-black text-black dark:text-white group-hover:text-black dark:group-hover:text-white transition-colors uppercase tracking-widest leading-none mb-1">{label}</span>
+        <span className="text-[9px] text-slate-800 dark:text-slate-400 font-black tracking-tight truncate max-w-full">{sub}</span>
       </div>
     </button>
   );

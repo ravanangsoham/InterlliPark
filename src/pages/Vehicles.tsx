@@ -61,7 +61,7 @@ export default function Vehicles({ vehicles }: VehiclesProps) {
             <ArrowLeft size={18} />
           </button>
           <div>
-            <h1 className="text-xl font-display font-bold text-slate-900 transition-colors">Your Vehicles</h1>
+            <h1 className="text-xl font-display font-bold text-slate-900 dark:text-white transition-colors">Your Vehicles</h1>
             <p className="text-slate-400 text-xs font-medium">{vehicles.length} Saved Units</p>
           </div>
         </div>
@@ -87,7 +87,7 @@ export default function Vehicles({ vehicles }: VehiclesProps) {
         ) : (
           vehicles.map((v, idx) => (
             <motion.div
-              key={v.id}
+              key={`vehicle-item-${v.id}-${idx}`}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.1 }}
@@ -99,7 +99,7 @@ export default function Vehicles({ vehicles }: VehiclesProps) {
               
               <div className="flex-1">
                 <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{v.ownerName || 'Personal Unit'}</h3>
-                <p className="font-mono text-lg font-bold text-slate-900 tracking-tighter uppercase transition-colors">{v.number}</p>
+                <p className="font-mono text-lg font-bold text-slate-900 dark:text-white tracking-tighter uppercase transition-colors">{v.number}</p>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="text-[10px] text-brand-primary font-bold bg-brand-primary/5 px-2 py-0.5 rounded-full">{v.type}</span>
                 </div>
@@ -128,7 +128,7 @@ export default function Vehicles({ vehicles }: VehiclesProps) {
               className="bg-white dark:bg-slate-900 max-w-md w-full rounded-[3rem] p-8 space-y-6 shadow-2xl border border-slate-200 dark:border-white/10"
             >
               <div className="flex justify-between items-center">
-                <h3 className="text-xl font-display font-bold text-slate-900">New Vector</h3>
+                <h3 className="text-xl font-display font-bold text-slate-900 dark:text-white">New Vector</h3>
                 <button onClick={() => setShowAdd(false)} className="p-2 text-slate-400 hover:text-brand-primary transition-colors"><X size={24} /></button>
               </div>
 

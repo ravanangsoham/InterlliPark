@@ -5,7 +5,8 @@ import {
   Play, Pause, RefreshCw, MoreVertical,
   CheckCircle2, XCircle, Search, Trash2,
   Bike, Truck, QrCode, ScanLine, X,
-  MessageSquare, Send, LogOut, User, Power
+  MessageSquare, Send, LogOut, User, Power, Ban,
+  Calendar, Lock, Unlock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -36,8 +37,7 @@ const MOCK_VEHICLES = [
 
 export default function Admin() {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const [slots, setSlots] = useState<Slot[]>([]);
+  const { user, role } = useAuth();
   const [feedActive, setFeedActive] = useState(true);
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
   const [isScanning, setIsScanning] = useState(false);
@@ -70,14 +70,62 @@ export default function Admin() {
   const [adminNotification, setAdminNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [confirmedBooking, setConfirmedBooking] = useState<any>(null);
-
-  const activeLocation = MOCK_LOCATIONS.find(l => l.id === activeLocationId) || MOCK_LOCATIONS[0];
   
-  // Real bookings for logs
+  // Advanced Block UI State
+  const [showBlockModal, setShowBlockModal] = useState(false);
+  const [blockTargetStatus, setBlockTargetStatus] = useState<SlotStatus>('blocked');
+  const [blockOptions, setBlockOptions] = useState({
+    type: 'maintenance' as any,
+    comment: '',
+    duration: 'permanent'
+  });
+
   const [realBookings, setRealBookings] = useState<any[]>([]);
   const [adminSlots, setAdminSlots] = useState<Slot[]>([]);
   const [selectedSlotIds, setSelectedSlotIds] = useState<Set<string>>(new Set());
   const [isBulkMode, setIsBulkMode] = useState(false);
+
+  // Cleanup effect for expired blocks
+  useEffect(() => {
+    if (!user || role !== 'admin' || adminSlots.length === 0) return;
+
+    const cleanupExpiredBlocks = async () => {
+      const now = Date.now();
+      const expiredSlots = adminSlots.filter(s => 
+        (s.status === 'blocked' || s.status === 'maintenance' || s.status === 'out_of_service') && 
+        s.blockMetadata?.blockedUntil != null && 
+        s.blockMetadata.blockedUntil < now
+      );
+
+
+      if (expiredSlots.length === 0) return;
+
+      console.log(`Reverting ${expiredSlots.length} expired blocks...`);
+      const batch = writeBatch(db);
+      expiredSlots.forEach(s => {
+        batch.update(doc(db, 'slots', s.id), {
+          status: 'available',
+          blockMetadata: null,
+          updatedAt: serverTimestamp()
+        });
+      });
+
+      try {
+        await batch.commit();
+        setAdminNotification({ 
+          message: `Auto-Protocol Complete: ${expiredSlots.length} maintenance windows expired`, 
+          type: 'success' 
+        });
+      } catch (error) {
+        console.error("Auto-cleanup failed:", error);
+      }
+    };
+
+    const interval = setInterval(cleanupExpiredBlocks, 60000); // Check every minute
+    cleanupExpiredBlocks(); // Initial check
+    
+    return () => clearInterval(interval);
+  }, [user, role, adminSlots]);
 
   useEffect(() => {
     // We'll use firestore slots instead of generateSlots
@@ -85,17 +133,20 @@ export default function Admin() {
 
   // Fetch maintenance mode
   useEffect(() => {
+    if (!user || role !== 'admin') return;
     const unsubscribe = onSnapshot(doc(db, 'settings', 'system'), (snapshot) => {
       if (snapshot.exists()) {
         setMaintenanceMode(snapshot.data().maintenanceMode || false);
       }
+    }, (error) => {
+      console.error("System settings error:", error);
     });
     return unsubscribe;
-  }, []);
+  }, [user, role]);
 
   // Fetch real bookings
   useEffect(() => {
-    if (!user) return;
+    if (!user || role !== 'admin') return;
     const q = query(collection(db, 'bookings'), orderBy('startTime', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setRealBookings(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -103,11 +154,11 @@ export default function Admin() {
       console.error("Admin bookings error:", error);
     });
     return unsubscribe;
-  }, [user]);
+  }, [user, role]);
 
   // Fetch real slots
   useEffect(() => {
-    if (!user) return;
+    if (!user || role !== 'admin') return;
     const q = query(collection(db, 'slots'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setAdminSlots(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -115,11 +166,11 @@ export default function Admin() {
       console.error("Admin slots error:", error);
     });
     return unsubscribe;
-  }, [user]);
+  }, [user, role]);
 
   // Fetch users
   useEffect(() => {
-    if (!user || activeTab !== 'users') return;
+    if (!user || role !== 'admin' || activeTab !== 'users') return;
     const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setUsersList(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -128,7 +179,7 @@ export default function Admin() {
       handleFirestoreError(error, OperationType.GET, 'users');
     });
     return unsubscribe;
-  }, [user, activeTab]);
+  }, [user, role, activeTab]);
 
   const handleAdminCheckIn = async (booking: any) => {
     try {
@@ -144,10 +195,10 @@ export default function Admin() {
         });
         
         if (slotRef) {
-          transaction.update(slotRef, {
+          transaction.set(slotRef, {
             status: 'occupied',
             updatedAt: serverTimestamp()
-          });
+          }, { merge: true });
         }
       });
 
@@ -185,11 +236,12 @@ export default function Admin() {
         });
 
         if (slotRef) {
-          transaction.update(slotRef, {
+          transaction.set(slotRef, {
             status: 'available',
             currentBookingId: null,
+            currentVehicleType: null,
             updatedAt: serverTimestamp()
-          });
+          }, { merge: true });
         }
       });
 
@@ -219,11 +271,12 @@ export default function Admin() {
         });
 
         if (slotRef) {
-          transaction.update(slotRef, {
+          transaction.set(slotRef, {
             status: 'available',
             currentBookingId: null,
+            currentVehicleType: null,
             updatedAt: serverTimestamp()
-          });
+          }, { merge: true });
         }
       });
 
@@ -242,10 +295,18 @@ export default function Admin() {
 
   // Fetch unique users who have messaged
   useEffect(() => {
-    if (!user) return;
-    const q = query(collection(db, 'support_messages'), orderBy('timestamp', 'desc'));
+    if (!user || role !== 'admin') return;
+    const q = query(collection(db, 'support_messages'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      // Sort client-side
+      msgs.sort((a: any, b: any) => {
+        const tA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.timestamp instanceof Date ? a.timestamp.getTime() : 0);
+        const tB = b.timestamp?.toMillis ? b.timestamp.toMillis() : (b.timestamp instanceof Date ? b.timestamp.getTime() : 0);
+        return tB - tA; // Descending for groups
+      });
+
       // Group by userId
       const userGroups = msgs.reduce((acc: any, msg: any) => {
         if (!acc[msg.userId]) {
@@ -266,27 +327,33 @@ export default function Admin() {
       handleFirestoreError(error, OperationType.GET, 'support_messages');
     });
     return unsubscribe;
-  }, [user]);
+  }, [user, role]);
 
   // Fetch messages for selected user
   useEffect(() => {
-    if (!selectedChatUser) {
+    if (!selectedChatUser || role !== 'admin') {
       setChatMessages([]);
       return;
     }
     const q = query(
       collection(db, 'support_messages'),
-      where('userId', '==', selectedChatUser),
-      orderBy('timestamp', 'asc')
+      where('userId', '==', selectedChatUser)
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setChatMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // Sort client-side
+      msgs.sort((a: any, b: any) => {
+        const tA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.timestamp instanceof Date ? a.timestamp.getTime() : 0);
+        const tB = b.timestamp?.toMillis ? b.timestamp.toMillis() : (b.timestamp instanceof Date ? b.timestamp.getTime() : 0);
+        return tA - tB; // Ascending for chat history
+      });
+      setChatMessages(msgs);
     }, (error) => {
       console.error("Transmission stream error:", error);
       handleFirestoreError(error, OperationType.GET, `support_messages/${selectedChatUser}`);
     });
     return unsubscribe;
-  }, [selectedChatUser]);
+  }, [selectedChatUser, role]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -323,16 +390,31 @@ export default function Admin() {
       return;
     }
 
+    const isCurrentlyBlocked = ['blocked', 'maintenance', 'out_of_service'].includes(slot.status);
+    
+    if (!isCurrentlyBlocked && slot.status !== 'available') {
+      // Don't toggle occupied or reserved slots via direct click if not blocked
+      return;
+    }
+
     if (slot.status === 'available') {
       setShowOfflineBooking(slot);
       return;
     }
 
     try {
-      const newStatus = slot.status === 'blocked' ? 'available' : 'blocked';
-      await updateDoc(doc(db, 'slots', slot.id), {
-        status: newStatus
-      });
+      const newStatus = isCurrentlyBlocked ? 'available' : 'blocked';
+      await setDoc(doc(db, 'slots', slot.id), {
+        status: newStatus,
+        blockMetadata: isCurrentlyBlocked ? null : {
+          type: 'permanent',
+          comment: 'Direct Administrative Block',
+          blockedAt: Date.now(),
+          blockedUntil: null,
+          duration: 'permanent'
+        },
+        updatedAt: serverTimestamp()
+      }, { merge: true });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `slots/${slot.id}`);
     }
@@ -368,11 +450,12 @@ export default function Admin() {
       const docRef = await addDoc(collection(db, 'bookings'), bookingData);
 
       // 2. Update the slot status
-      await updateDoc(doc(db, 'slots', showOfflineBooking.id), {
+      await setDoc(doc(db, 'slots', showOfflineBooking.id), {
         status: 'occupied',
         currentBookingId: docRef.id,
+        currentVehicleType: offlineForm.vehicleType,
         updatedAt: serverTimestamp()
-      });
+      }, { merge: true });
 
       // For the modal display, use local time since serverTimestamp is not available yet
       setConfirmedBooking({ 
@@ -395,23 +478,116 @@ export default function Admin() {
     }
   };
 
-  const handleBulkUpdate = async (newStatus: SlotStatus) => {
+  const handleBulkUpdate = async (newStatus: SlotStatus, options?: any) => {
     if (selectedSlotIds.size === 0) return;
+    
+    // Check for active sessions if blocking
+    if (['blocked', 'maintenance', 'out_of_service'].includes(newStatus)) {
+      const busySlots = adminSlots.filter(s => selectedSlotIds.has(s.id) && (s.status === 'occupied' || s.status === 'reserved'));
+      // Note: Removed window.confirm for streamlined admin operations in restricted environments
+    }
     
     try {
       const batch = writeBatch(db);
+      
+      // Cancellation logic
+      if (options?.type === 'cancellation') {
+        const activeBookingsToCancel = realBookings.filter(b => 
+          selectedSlotIds.has(b.slotId) && 
+          (b.status === 'active' || b.status === 'reserved')
+        );
+        
+        activeBookingsToCancel.forEach(b => {
+          batch.update(doc(db, 'bookings', b.id), {
+            status: 'cancelled',
+            cancelledAt: serverTimestamp(),
+            cancellationReason: options.comment || 'Administrative Slot Lockdown'
+          });
+        });
+      }
+
       selectedSlotIds.forEach(id => {
-        batch.update(doc(db, 'slots', id), {
+        const updateData: any = {
           status: newStatus,
           updatedAt: serverTimestamp()
-        });
+        };
+        
+        if (options) {
+          let blockedUntil = null;
+          if (options.duration !== 'permanent') {
+            let ms = 0;
+            if (options.duration === 'custom' && options.customHours) {
+              ms = parseFloat(options.customHours) * 3600000;
+            } else {
+              ms = options.duration === '1h' ? 3600000 : 
+                   options.duration === '4h' ? 14400000 : 
+                   options.duration === 'day' ? 86400000 : 0;
+            }
+            if (ms > 0) blockedUntil = Date.now() + ms;
+          }
+
+          updateData.blockMetadata = {
+            type: options.type,
+            comment: options.comment,
+            blockedAt: Date.now(),
+            blockedUntil,
+            duration: options.duration
+          };
+        } else {
+          // If making available, clear metadata
+          if (newStatus === 'available') {
+            updateData.blockMetadata = null;
+          }
+        }
+        
+        batch.set(doc(db, 'slots', id), updateData, { merge: true });
       });
+      
+      const updatedCount = selectedSlotIds.size;
       await batch.commit();
       setSelectedSlotIds(new Set());
-      alert(`Successfully updated ${selectedSlotIds.size} slots.`);
+      setShowBlockModal(false);
+      setAdminNotification({ 
+        message: `Status Grid Updated: ${updatedCount} nodes reassigned to ${newStatus}`, 
+        type: 'success' 
+      });
     } catch (error) {
       console.error("Bulk update failed:", error);
-      alert("Bulk update failed. Check console for details.");
+      setAdminNotification({ message: "Grid integrity failure: status update rejected", type: 'error' });
+    }
+  };
+
+  const handleQuickBlock = async (slotId: string) => {
+    try {
+      await setDoc(doc(db, 'slots', slotId), {
+        status: 'blocked',
+        updatedAt: serverTimestamp(),
+        blockMetadata: {
+          type: 'permanent',
+          comment: 'Direct Administrative Block (Quick Action)',
+          blockedAt: Date.now(),
+          blockedUntil: null,
+          duration: 'permanent'
+        }
+      }, { merge: true });
+      setAdminNotification({ message: "Node secured: Administrative lockdown active", type: 'success' });
+    } catch (error) {
+      console.error("Quick block failed:", error);
+      setAdminNotification({ message: "Lockdown protocol failed", type: 'error' });
+    }
+  };
+
+  const handleStatusRevert = async (slot: any) => {
+    try {
+      await setDoc(doc(db, 'slots', slot.id), {
+        status: 'available',
+        blockMetadata: null,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      setAdminNotification({ message: `Node ${slot.number} restored to global availability index`, type: 'success' });
+    } catch (error) {
+      console.error("Revert failed:", error);
+      setAdminNotification({ message: "Control protocol error: restoration rejected", type: 'error' });
     }
   };
 
@@ -461,6 +637,28 @@ export default function Admin() {
       console.error("Role update failed:", error);
       setAdminNotification({ message: "Protocol failure: Permission denied or network interrupt", type: 'error' });
       // Don't throw here to avoid crashing the UI, just show notification
+    } finally {
+      setUpdatingUserId(null);
+    }
+  };
+
+  const handleToggleUserBlock = async (targetUser: any) => {
+    if (updatingUserId) return;
+    const newBlockState = !targetUser.isBlocked;
+    
+    setUpdatingUserId(targetUser.id);
+    try {
+      await updateDoc(doc(db, 'users', targetUser.id), {
+        isBlocked: newBlockState,
+        updatedAt: serverTimestamp()
+      });
+      setAdminNotification({ 
+        message: `Node ${targetUser.email} ${newBlockState ? 'DEACTIVATED' : 'REACTIVATED'}`, 
+        type: 'success' 
+      });
+    } catch (error) {
+      console.error("Block toggle failed:", error);
+      setAdminNotification({ message: "Protocol failure: Block operation rejected", type: 'error' });
     } finally {
       setUpdatingUserId(null);
     }
@@ -672,14 +870,14 @@ export default function Admin() {
           </div>
           <div>
              <div className="flex items-center gap-3">
-               <h1 className="text-4xl font-display font-black text-black tracking-tighter transition-colors">Admin Terminal</h1>
+               <h1 className="text-4xl font-display font-black text-black dark:text-white tracking-tighter transition-colors">Admin Terminal</h1>
                {maintenanceMode && (
                  <span className="flex items-center gap-2 px-3 py-1 bg-red-500 text-white text-[9px] font-black rounded-full animate-pulse shadow-lg shadow-red-500/20 uppercase tracking-widest leading-none">
                     <Activity size={10} /> Maintenance Active
                  </span>
                )}
              </div>
-             <p className="text-[11px] font-black text-black uppercase tracking-[0.4em] flex items-center gap-2 mt-1.5 transition-colors">
+             <p className="text-[11px] font-black text-slate-800 dark:text-slate-400 uppercase tracking-[0.4em] flex items-center gap-2 mt-1.5 transition-colors">
                 <span className={`w-2.5 h-2.5 rounded-full animate-pulse ${maintenanceMode ? 'bg-red-500 shadow-red-500/50 shadow-lg' : 'bg-brand-primary shadow-brand-primary/50 shadow-lg'}`} />
                 MIT Core: {maintenanceMode ? 'Locked' : 'Operational'}
              </p>
@@ -690,7 +888,7 @@ export default function Admin() {
           <div className="flex gap-1.5 bg-white dark:bg-white/10 p-1.5 rounded-2xl border border-slate-200 dark:border-white/10 shadow-inner">
             {(['overview', 'slots', 'users', 'revenue', 'feeds', 'inquiries', 'sensors'] as const).map(tab => (
               <button 
-                key={tab}
+                key={`tab-btn-${tab}`}
                 onClick={() => setActiveTab(tab)}
                 className={`px-6 py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.25em] transition-all whitespace-nowrap ${
                   activeTab === tab 
@@ -746,7 +944,7 @@ export default function Admin() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
               <MetricCard icon={<Car size={22} />} label="Total Nodes" value={adminSlots.length} sub="Slots" />
               <MetricCard icon={<CheckCircle2 size={22} />} label="Available" value={adminSlots.filter(s => s.status === 'available').length} sub="Ready" color="text-brand-primary" />
-              <MetricCard icon={<Users size={22} />} label="Operational" value={adminSlots.filter(s => s.status === 'occupied').length} sub="Full" color="text-black" />
+              <MetricCard icon={<Users size={22} />} label="Operational" value={adminSlots.filter(s => s.status === 'occupied').length} sub="Full" color="text-slate-900 dark:text-white" />
               <MetricCard icon={<MessageSquare size={22} />} label="Support" value={chats.length} sub="Chats" color="text-brand-primary" />
             </div>
 
@@ -761,18 +959,18 @@ export default function Admin() {
                         <div className="space-y-4">
                            {realBookings.filter(b => b.status === 'active' || b.status === 'reserved').length === 0 ? (
                              <div className="text-center py-10">
-                                <p className="text-sm text-black font-black uppercase tracking-widest">No Active Traffic</p>
+                                <p className="text-sm text-black dark:text-white font-black uppercase tracking-widest">No Active Traffic</p>
                              </div>
                            ) : (
-                              realBookings.filter(b => b.status === 'active' || b.status === 'reserved').slice(0, 8).map(v => (
-                               <div key={v.id} className="flex items-center justify-between p-5 bg-white dark:bg-white/5 rounded-[2rem] border border-slate-100 dark:border-white/5 group transition-all hover:shadow-lg">
+                              realBookings.filter(b => b.status === 'active' || b.status === 'reserved').slice(0, 8).map((v, vIdx) => (
+                               <div key={`traffic-${v.id}-${vIdx}`} className="flex items-center justify-between p-5 bg-white dark:bg-white/5 rounded-[2rem] border border-slate-100 dark:border-white/5 group transition-all hover:shadow-lg">
                                   <div className="flex items-center gap-5">
                                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${v.status === 'reserved' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-brand-primary/10 text-brand-primary'}`}>
                                         {v.vehicleType === 'Bike' ? <Bike size={24} /> : <Car size={24} />}
                                      </div>
                                      <div>
                                         <div className="flex items-center gap-2">
-                                          <p className="text-base font-mono font-black text-black tracking-widest leading-none">{v.vehicleNumber}</p>
+                                          <p className="text-base font-mono font-black text-black dark:text-white tracking-widest leading-none">{v.vehicleNumber}</p>
                                           {v.status === 'reserved' && (
                                             <span className="px-2 py-0.5 bg-emerald-500 text-white text-[8px] font-black rounded-sm uppercase tracking-widest">Pre-booked</span>
                                           )}
@@ -856,18 +1054,18 @@ export default function Admin() {
            <section className="bg-slate-900/60 p-12 rounded-[3.5rem] border border-white/10 shadow-2xl space-y-10 max-w-6xl mx-auto backdrop-blur-xl">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                   <div className="space-y-2">
-                  <h2 className="text-4xl font-display font-black text-black tracking-tighter">Live Surveillance</h2>
-                  <p className="text-black dark:text-brand-primary text-xs font-black uppercase tracking-[0.4em] animate-pulse">Quad-Stream Feed Delta</p>
+                  <h2 className="text-4xl font-display font-black text-black dark:text-white tracking-tighter">Live Surveillance</h2>
+                  <p className="text-black dark:text-white dark:text-brand-primary text-xs font-black uppercase tracking-[0.4em] animate-pulse">Quad-Stream Feed Delta</p>
                   </div>
                   <div className="flex gap-4">
-                     <div className="px-5 py-2 bg-white/10 rounded-xl text-[10px] font-black text-black uppercase tracking-widest border border-white/10">CORE_LINK_STABLE</div>
+                     <div className="px-5 py-2 bg-white/10 rounded-xl text-[10px] font-black text-black dark:text-white uppercase tracking-widest border border-white/10">CORE_LINK_STABLE</div>
                      <div className="px-5 py-2 bg-brand-primary text-background-deep rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-brand-primary/20">4X LIVE</div>
                   </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {[1, 2, 3, 4].map((camId) => (
-                    <div key={camId} className="relative group rounded-[2rem] overflow-hidden border-2 border-white/10 shadow-xl bg-black">
+                    <div key={`cam-feed-${camId}`} className="relative group rounded-[2rem] overflow-hidden border-2 border-white/10 shadow-xl bg-black">
                         <div className="aspect-video relative">
                             <div className={`absolute inset-0 bg-cover bg-center opacity-40 mix-blend-overlay grayscale contrast-125 ${
                               camId === 1 ? "bg-[url('https://images.unsplash.com/photo-1506521781263-d8422e82f27a?auto=format&fit=crop&q=80&w=800')]" :
@@ -922,9 +1120,9 @@ export default function Admin() {
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-                 {chats.map(chat => (
+                 {chats.map((chat, idx) => (
                     <button 
-                      key={chat.userId}
+                      key={`chat-user-item-${chat.userId}-${idx}`}
                       onClick={() => setSelectedChatUser(chat.userId)}
                       className={`p-10 rounded-[3rem] border-2 transition-all text-left group relative overflow-hidden ${
                          selectedChatUser === chat.userId 
@@ -973,7 +1171,7 @@ export default function Admin() {
                     <div className="flex flex-col gap-2">
                         <div className="flex items-center gap-4">
                             <Activity size={26} className="text-brand-primary" />
-                            <h2 className="text-2xl font-display font-black text-black tracking-tight">Slot Control Matrix</h2>
+                            <h2 className="text-2xl font-display font-black text-black dark:text-white tracking-tight">Slot Control Matrix</h2>
                         </div>
                         <div className="flex items-center gap-4 mt-2">
                           <button 
@@ -1009,16 +1207,31 @@ export default function Admin() {
                                       Clear ({selectedSlotIds.size})
                                     </button>
                                     <button 
-                                      onClick={() => handleBulkUpdate('blocked')}
+                                      onClick={() => {
+                                        setBlockTargetStatus('blocked');
+                                        setShowBlockModal(true);
+                                      }}
                                       className="px-4 py-2 bg-slate-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-700 transition-all shadow-lg"
                                     >
                                       Block
                                     </button>
                                     <button 
-                                      onClick={() => handleBulkUpdate('available')}
-                                      className="px-4 py-2 bg-brand-primary text-background-deep rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-accent transition-all shadow-lg"
+                                      onClick={() => handleBulkUpdate('blocked', {
+                                        type: 'permanent',
+                                        comment: 'Bulk Administrative Block (Quick)',
+                                        duration: 'permanent'
+                                      })}
+                                      className="px-4 py-2 bg-red-600/20 border border-red-500/30 text-red-500 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all shadow-lg flex items-center gap-2"
                                     >
-                                      Make Available
+                                      <Lock size={12} />
+                                      Quick Block
+                                    </button>
+                                    <button 
+                                      onClick={() => handleBulkUpdate('available')}
+                                      className="px-4 py-2 bg-emerald-600/20 border border-emerald-500/30 text-emerald-500 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all shadow-lg flex items-center gap-2"
+                                    >
+                                      <Unlock size={12} />
+                                      Quick Unblock
                                     </button>
                                   </>
                                 )}
@@ -1029,9 +1242,9 @@ export default function Admin() {
                     </div>
                     <div className="flex flex-col sm:flex-row gap-4 w-full xl:w-auto">
                         <div className="flex gap-1 bg-white/10 p-1.5 rounded-2xl border border-white/10">
-                            {Array.from({ length: 2 }, (_, i) => i + 1).map(floor => (
+                            {Array.from({ length: 2 }, (_, i) => i + 1).map((floor, fIdx) => (
                               <button 
-                                  key={floor}
+                                  key={`floor-btn-${floor}-${fIdx}`}
                                   onClick={() => setActiveFloor(floor)}
                                   className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
                                     activeFloor === floor ? 'bg-brand-primary text-background-deep shadow-lg scale-105' : 'text-slate-400 hover:text-white'
@@ -1045,30 +1258,78 @@ export default function Admin() {
                   </div>
 
                   <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-4">
-                    {filteredSlots.map(s => {
-                      const isSelected = selectedSlotIds.has(s.id);
-                      return (
-                        <button 
-                          key={s.id}
-                          onClick={() => handleToggleSlot(s)}
-                          className={`aspect-square rounded-2xl flex items-center justify-center text-[11px] font-mono font-black transition-all border-2 shadow-inner relative group ${
-                              isSelected ? 'ring-4 ring-brand-primary/40 border-brand-primary scale-105 z-10' : ''
-                          } ${
-                              s.status === 'available' ? 'bg-brand-primary/10 text-brand-primary border-brand-primary/30 hover:bg-brand-primary/30 hover:scale-105' :
-                              s.status === 'reserved' ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]' :
-                              s.status === 'occupied' ? 'bg-red-500/20 text-red-500 border-red-500/20 cursor-not-allowed' :
-                              'bg-slate-800 text-slate-400 border-white/5 hover:bg-slate-700'
-                          }`}
-                        >
-                          {isSelected && (
-                            <div className="absolute top-1 right-1">
-                              <CheckCircle2 size={12} className="text-brand-primary" />
-                            </div>
-                          )}
-                          {s.number}
-                        </button>
-                      );
-                    })}
+                     {filteredSlots.map((s, sIdx) => {
+                       const isSelected = selectedSlotIds.has(s.id);
+                       const isBlocked = s.status === 'blocked' || s.status === 'maintenance' || s.status === 'out_of_service';
+                       return (
+                         <div key={`slot-grid-${s.id}-${sIdx}`} className="relative group">
+                            <button 
+                              onClick={() => handleToggleSlot(s)}
+                              title={isBlocked ? `Status: ${s.status}${s.blockMetadata?.comment ? `\nReason: ${s.blockMetadata.comment}` : ''}${s.blockMetadata?.blockedUntil ? `\nUntil: ${new Date(s.blockMetadata.blockedUntil).toLocaleString()}` : ''}` : `Slot ${s.number}`}
+                              className={`w-full aspect-square rounded-2xl flex flex-col items-center justify-center text-[11px] font-mono font-black transition-all border-2 shadow-inner ${
+                                  isSelected ? 'ring-4 ring-brand-primary/40 border-brand-primary scale-105 z-10' : ''
+                              } ${
+                                  s.status === 'available' ? 'bg-brand-primary/10 text-brand-primary border-brand-primary/30 hover:bg-brand-primary/30 hover:scale-105' :
+                                  s.status === 'reserved' ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]' :
+                                  s.status === 'occupied' ? 'bg-red-500/20 text-red-500 border-red-500/20 cursor-not-allowed' :
+                                  'bg-slate-800 text-slate-400 border-white/5 hover:bg-slate-700'
+                              }`}
+                            >
+                              {isSelected && (
+                                <div className="absolute top-1 right-1">
+                                  <CheckCircle2 size={12} className="text-brand-primary" />
+                                </div>
+                              )}
+                              <span>{s.number}</span>
+                              {!isBlocked && (
+                                <div className="mt-1 opacity-70">
+                                   {(s.currentVehicleType || s.type) === 'Bike' ? <Bike size={12} /> : 
+                                    (s.currentVehicleType || s.type) === 'Truck' ? <Truck size={12} /> : 
+                                    <Car size={12} />}
+                                </div>
+                              )}
+                              {isBlocked && (
+                                <div className="mt-1 flex flex-col items-center gap-0.5">
+                                   <div className="opacity-40 group-hover:opacity-100 transition-opacity">
+                                      <Lock size={10} />
+                                   </div>
+                                   <span className={`text-[7px] font-black uppercase tracking-tighter ${
+                                     s.blockMetadata?.type === 'maintenance' ? 'text-amber-500' : 
+                                     s.blockMetadata?.type === 'cancellation' ? 'text-red-500' : 'text-slate-400'
+                                   }`}>
+                                     {s.blockMetadata?.type || 'BLOCKED'}
+                                   </span>
+                                </div>
+                              )}
+                            </button>
+                            
+                            {isBlocked && !isSelected && (
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleStatusRevert(s);
+                                }}
+                                className="absolute -top-3 -right-3 bg-emerald-600 text-white w-8 h-8 rounded-full flex items-center justify-center transition-all hover:scale-110 shadow-lg z-20 border-2 border-white dark:border-slate-900 shadow-emerald-500/20"
+                                title="Instant Re-Activate"
+                              >
+                                <Unlock size={14} />
+                              </button>
+                            )}
+                            {!isBlocked && !isSelected && s.status !== 'occupied' && (
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleQuickBlock(s.id);
+                                }}
+                                className="absolute -top-3 -right-3 bg-red-600 text-white w-8 h-8 rounded-full flex items-center justify-center transition-all hover:scale-110 shadow-lg z-20 border-2 border-white dark:border-slate-900 shadow-red-500/20"
+                                title="Instant Block"
+                              >
+                                <Ban size={14} />
+                              </button>
+                            )}
+                         </div>
+                       );
+                     })}
                   </div>
                   
                   <div className="flex flex-wrap gap-4 pt-4 border-t border-slate-200 dark:border-white/5">
@@ -1080,21 +1341,21 @@ export default function Admin() {
                 </section>
 
                 <section className="bg-slate-100 dark:bg-slate-900/40 rounded-[3rem] border border-slate-200 dark:border-white/5 shadow-xl p-8 space-y-6">
-                  <h3 className="text-lg font-display font-black text-black uppercase tracking-tight">Recent Activity</h3>
+                  <h3 className="text-lg font-display font-black text-black dark:text-white uppercase tracking-tight">Recent Activity</h3>
                   <div className="space-y-3">
-                      {realBookings.filter(b => (b.status === 'active' || b.status === 'reserved') && (b.locationId === activeLocationId || !b.locationId)).map(b => (
-                        <div key={b.id} className="flex items-center justify-between p-4 bg-white dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/5 group transition-all hover:border-brand-primary/30">
+                      {realBookings.filter(b => (b.status === 'active' || b.status === 'reserved') && (b.locationId === activeLocationId || !b.locationId)).map((b, idx) => (
+                        <div key={`recent-activity-${b.id}-${idx}`} className="flex items-center justify-between p-4 bg-white dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/5 group transition-all hover:border-brand-primary/30">
                             <div className="flex items-center gap-4">
-                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${b.status === 'reserved' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-slate-100 dark:bg-white/5 text-slate-500'}`}>
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${b.status === 'reserved' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-slate-100 dark:bg-white/5 text-slate-500 text-black dark:text-white'}`}>
                                   {b.vehicleType === 'Bike' ? <Bike size={18} /> : <Car size={18} />}
                               </div>
                                <div>
-                                   <p className="text-sm font-mono font-black text-black uppercase transition-colors">{b.vehicleNumber}</p>
+                                   <p className="text-sm font-mono font-black text-black dark:text-white uppercase transition-colors">{b.vehicleNumber}</p>
                                    <div className="flex items-center gap-2">
-                                     <p className="text-[9px] text-black font-black uppercase">{b.ownerName}</p>
-                                     <span className="w-1 h-1 rounded-full bg-black/20" />
+                                     <p className="text-[9px] text-black dark:text-slate-400 font-black uppercase">{b.ownerName}</p>
+                                     <span className="w-1 h-1 rounded-full bg-black/20 dark:bg-white/20" />
                                      <p className={`text-[8px] font-black uppercase tracking-tighter ${b.status === 'reserved' ? 'text-emerald-500' : 'text-brand-primary'}`}>{b.status === 'reserved' ? 'Reserved' : 'In-Grid'}</p>
-                                     {b.arrivalTime && <span className="text-[8px] text-black font-mono italic font-black">@{b.arrivalTime}</span>}
+                                     {b.arrivalTime && <span className="text-[8px] text-black dark:text-slate-400 font-mono italic font-black">@{b.arrivalTime}</span>}
                                    </div>
                                </div>
                             </div>
@@ -1215,8 +1476,8 @@ export default function Admin() {
                                 </tr>
                              </thead>
                              <tbody className="text-sm font-medium">
-                                {filteredRealBookings.slice(0, 50).map((b, idx) => (
-                                   <tr key={idx} className="border-t border-slate-100 dark:border-white/5 text-slate-900">
+                                {filteredRealBookings.slice(0, 50).map((b, bIdx) => (
+                                   <tr key={`audit-row-${b.id || bIdx}-${bIdx}`} className="border-t border-slate-100 dark:border-white/5 text-slate-900">
                                       <td className="py-4 font-mono font-bold text-slate-900 uppercase transition-colors">{b.vehicleNumber}</td>
                                       <td className="py-4 text-slate-500">{b.ownerName}</td>
                                       <td className="py-4">
@@ -1337,15 +1598,15 @@ export default function Admin() {
                                   dataKey="value"
                                 >
                                   {PIE_VEHICLE_DATA.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={entry.color} />
+                                    <Cell key={`pie-cell-${entry.name}-${index}`} fill={entry.color} />
                                   ))}
                                 </Pie>
                                 <Tooltip />
                               </PieChart>
                            </ResponsiveContainer>
                            <div className="flex justify-center gap-6 mt-4">
-                              {PIE_VEHICLE_DATA.map(entry => (
-                                 <div key={entry.name} className="flex items-center gap-2">
+                              {PIE_VEHICLE_DATA.map((entry, idx) => (
+                                 <div key={`pie-v-legend-${idx}`} className="flex items-center gap-2">
                                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
                                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{entry.name}</span>
                                  </div>
@@ -1390,22 +1651,45 @@ export default function Admin() {
                <section className="bg-slate-100 dark:bg-slate-900/40 rounded-[3rem] border border-slate-200 dark:border-white/5 shadow-xl overflow-hidden">
                   <div className="p-8 border-b border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.02] flex justify-between items-center">
                      <h2 className="text-xl font-display font-bold text-slate-900 tracking-tight">Personnel Registry</h2>
-                     <div className="relative w-64 group">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-brand-primary transition-colors" size={16} />
-                        <input 
-                           value={userSearchTerm}
-                           onChange={(e) => setUserSearchTerm(e.target.value)}
-                           placeholder="Search digital ID..."
-                           className="w-full h-12 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl pl-11 pr-5 text-xs font-medium outline-none focus:border-brand-primary transition-all text-black dark:text-white"
-                        />
+                     <div className="flex items-center gap-3">
+                        <button 
+                           onClick={async () => {
+                              const blockedUsers = usersList.filter(u => u.isBlocked);
+                              if (blockedUsers.length === 0) return;
+                              setUpdatingUserId('bulk-unblock');
+                              try {
+                                 for (const u of blockedUsers) {
+                                    await updateDoc(doc(db, 'users', u.id), { isBlocked: false, updatedAt: serverTimestamp() });
+                                 }
+                                 setAdminNotification({ message: 'All global restrictions lifted', type: 'success' });
+                              } catch (e) {
+                                 setAdminNotification({ message: 'Bulk operation failed', type: 'error' });
+                              } finally {
+                                 setUpdatingUserId(null);
+                              }
+                           }}
+                           className="h-12 px-6 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[10px] font-black uppercase tracking-widest hover:bg-emerald-500 hover:text-white transition-all shadow-lg shadow-emerald-500/5 flex items-center gap-2"
+                        >
+                           <Unlock size={14} />
+                           Global Unblock
+                        </button>
+                        <div className="relative w-64 group">
+                           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-brand-primary transition-colors" size={16} />
+                           <input 
+                              value={userSearchTerm}
+                              onChange={(e) => setUserSearchTerm(e.target.value)}
+                              placeholder="Search digital ID..."
+                              className="w-full h-12 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl pl-11 pr-5 text-xs font-medium outline-none focus:border-brand-primary transition-all text-black dark:text-white"
+                           />
+                        </div>
                      </div>
                   </div>
                   <div className="p-8">
                      <div className="space-y-4">
                 {usersList
                   .filter(u => u.email.toLowerCase().includes(userSearchTerm.toLowerCase()) || (u.id && u.id.toLowerCase().includes(userSearchTerm.toLowerCase())))
-                  .map((u) => (
-                  <div key={u.id} className="flex items-center justify-between p-6 bg-white dark:bg-slate-900/40 rounded-[2.5rem] border border-slate-200 dark:border-white/10 group transition-all hover:border-brand-primary/40 hover:shadow-xl dark:hover:shadow-brand-primary/5">
+                  .map((u, uIdx) => (
+                  <div key={`user-card-${u.id}-${uIdx}`} className="flex items-center justify-between p-6 bg-white dark:bg-slate-900/40 rounded-[2.5rem] border border-slate-200 dark:border-white/10 group transition-all hover:border-brand-primary/40 hover:shadow-xl dark:hover:shadow-brand-primary/5">
                     <div className="flex items-center gap-6">
                       <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-300 ${
                         u.role === 'admin' 
@@ -1416,19 +1700,36 @@ export default function Admin() {
                       </div>
                       <div>
                         <div className="flex items-center gap-3 mb-1">
-                          <h4 className="text-base font-display font-black text-black tracking-tight">{u.email}</h4>
+                          <h4 className="text-base font-display font-black text-black dark:text-white tracking-tight">{u.email}</h4>
                           <span className={`px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-widest ${
-                            u.role === 'admin' ? 'bg-brand-primary text-background-deep' : 'bg-slate-200 dark:bg-white/10 text-black font-black'
+                            u.role === 'admin' ? 'bg-brand-primary text-background-deep' : 'bg-slate-200 dark:bg-white/10 text-black dark:text-white font-black'
                           }`}>
                             {u.role}
                           </span>
                         </div>
-                        <p className="text-[10px] text-black font-mono font-black tracking-widest">
+                        <p className="text-[10px] text-black dark:text-white/60 font-mono font-black tracking-widest">
                           NODE_HASH: {u.id.slice(0, 12).toUpperCase()}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
+                      <button 
+                        onClick={() => handleToggleUserBlock(u)}
+                        disabled={updatingUserId === u.id}
+                        title={u.isBlocked ? 'Reactivate Node' : 'Deactivate Node'}
+                        className={`h-12 w-12 rounded-2xl flex items-center justify-center transition-all border active:scale-95 disabled:opacity-50 ${
+                          u.isBlocked 
+                            ? 'bg-red-500 text-white border-red-600 shadow-lg shadow-red-500/20' 
+                            : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-400 hover:text-red-500 hover:border-red-500/30'
+                        }`}
+                      >
+                        {updatingUserId === u.id ? (
+                          <RefreshCw size={18} className="animate-spin" />
+                        ) : (
+                          <Ban size={18} />
+                        )}
+                      </button>
+
                       <button 
                         onClick={() => handleUpdateUserRole(u)}
                         disabled={updatingUserId === u.id}
@@ -1507,7 +1808,7 @@ export default function Admin() {
                            { name: "IR Proximity", desc: "Cost-effective. Best for binary 'Occupied/Empty' detection. Can be affected by direct sunlight." },
                            { name: "LDR + Laser", desc: "High precision. Ideal for beam-break detection across slot boundaries." }
                          ].map((s, i) => (
-                           <div key={i} className="space-y-1">
+                           <div key={`iot-sensor-${s.name}-${i}`} className="space-y-1">
                               <p className="text-xs font-bold text-white">{s.name}</p>
                               <p className="text-[10px] text-slate-400 leading-relaxed font-medium">{s.desc}</p>
                            </div>
@@ -1600,7 +1901,7 @@ export default function Admin() {
                    </div>
                 )}
                 {chatMessages.map((msg, idx) => (
-                  <div key={idx} className={`flex ${msg.isAdmin ? 'justify-end' : 'justify-start'}`}>
+                  <div key={`msg-item-${msg.id || idx}-${idx}`} className={`flex ${msg.isAdmin ? 'justify-end' : 'justify-start'}`}>
                     <div className={`max-w-[85%] p-5 rounded-3xl text-sm font-medium shadow-sm leading-relaxed ${
                       msg.isAdmin 
                         ? 'bg-brand-primary text-background-deep rounded-tr-none' 
@@ -1664,9 +1965,9 @@ export default function Admin() {
                   <div className="space-y-3">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Vehicle Type</label>
                     <div className="grid grid-cols-2 gap-3">
-                      {(['4-Wheeler', 'Bike'] as VehicleType[]).map(type => (
+                      {(['4-Wheeler', 'Bike'] as VehicleType[]).map((type, tIdx) => (
                         <button
-                          key={type}
+                          key={`offline-form-type-${type}-${tIdx}`}
                           type="button"
                           onClick={() => setOfflineForm(prev => ({ ...prev, vehicleType: type }))}
                           className={`h-14 rounded-2xl flex items-center justify-center gap-2 border-2 transition-all font-black text-[10px] uppercase tracking-widest ${
@@ -1712,7 +2013,7 @@ export default function Admin() {
                       placeholder="KA-01-XX-0000"
                       value={offlineForm.vehicleNumber}
                       onChange={(e) => setOfflineForm(prev => ({ ...prev, vehicleNumber: e.target.value.toUpperCase() }))}
-                      className="w-full h-16 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl px-6 font-mono font-bold text-lg tracking-widest text-slate-900 focus:ring-4 focus:ring-brand-primary/20 outline-none transition-all shadow-inner"
+                      className="w-full h-16 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl px-6 font-mono font-bold text-lg tracking-widest text-slate-900 dark:text-white focus:ring-4 focus:ring-brand-primary/20 outline-none transition-all shadow-inner"
                     />
                   </div>
 
@@ -1723,7 +2024,7 @@ export default function Admin() {
                         placeholder="Name"
                         value={offlineForm.ownerName}
                         onChange={(e) => setOfflineForm(prev => ({ ...prev, ownerName: e.target.value }))}
-                        className="w-full h-16 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl px-6 font-bold text-sm text-slate-900 focus:ring-4 focus:ring-brand-primary/20 outline-none transition-all shadow-inner"
+                        className="w-full h-16 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl px-6 font-bold text-sm text-slate-900 dark:text-white focus:ring-4 focus:ring-brand-primary/20 outline-none transition-all shadow-inner"
                       />
                     </div>
                     <div className="space-y-3">
@@ -1732,7 +2033,7 @@ export default function Admin() {
                         placeholder="Phone Number"
                         value={offlineForm.phone}
                         onChange={(e) => setOfflineForm(prev => ({ ...prev, phone: e.target.value }))}
-                        className="w-full h-16 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl px-6 font-bold text-sm text-slate-900 focus:ring-4 focus:ring-brand-primary/20 outline-none transition-all shadow-inner"
+                        className="w-full h-16 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl px-6 font-bold text-sm text-slate-900 dark:text-white focus:ring-4 focus:ring-brand-primary/20 outline-none transition-all shadow-inner"
                       />
                     </div>
                   </div>
@@ -1754,11 +2055,227 @@ export default function Admin() {
                     {isBooking ? <RefreshCw size={24} className="animate-spin" /> : <Power size={24} />}
                     Authorize Entry
                   </button>
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setSelectedSlotIds(new Set([showOfflineBooking.id]));
+                      setShowOfflineBooking(null);
+                      setShowBlockModal(true);
+                    }}
+                    className="w-16 h-16 bg-red-500/10 text-red-500 flex items-center justify-center rounded-2xl border border-red-500/20 hover:bg-red-500 hover:text-white transition-all shadow-lg"
+                    title="Transition to Block Management"
+                  >
+                    <Ban size={24} />
+                  </button>
                 </div>
               </form>
             </motion.section>
           </div>
         )}
+        {/* Block Management Modal */}
+        <AnimatePresence>
+          {showBlockModal && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+               <motion.div 
+                 initial={{ opacity: 0 }}
+                 animate={{ opacity: 1 }}
+                 exit={{ opacity: 0 }}
+                 onClick={() => setShowBlockModal(false)}
+                 className="absolute inset-0 bg-black/80 backdrop-blur-md"
+               />
+               <motion.div 
+                 initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                 animate={{ scale: 1, opacity: 1, y: 0 }}
+                 exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                 className="bg-slate-900 border border-white/10 w-full max-w-lg rounded-[3rem] p-10 relative z-10 shadow-2xl space-y-8"
+               >
+                  <div className="flex justify-between items-center">
+                     <div className="space-y-1">
+                        <h3 className="text-2xl font-display font-black text-white tracking-tight">Slot Management</h3>
+                        <p className="text-[10px] font-black text-brand-primary uppercase tracking-[0.4em]">Node Reassignment protocol</p>
+                     </div>
+                     <button onClick={() => setShowBlockModal(false)} className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-white hover:bg-white/10 transition-all">
+                        <X size={24} />
+                     </button>
+                  </div>
+
+                  <div className="space-y-6">
+                     <div className="bg-white/5 rounded-2xl p-4 border border-white/10 flex items-center justify-between">
+                        <div>
+                           <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Active Selection</p>
+                           <p className="text-sm font-display font-bold text-white">{selectedSlotIds.size} Neural Nodes</p>
+                        </div>
+                        <div className="flex -space-x-2">
+                           {Array.from(selectedSlotIds).slice(0, 3).map(id => {
+                              const slot = adminSlots.find(s => s.id === id);
+                              return (
+                                 <div key={`modal-slot-${id}`} className="w-8 h-8 rounded-lg bg-brand-primary/20 border border-brand-primary/40 flex items-center justify-center text-[10px] font-black text-brand-primary">
+                                    {slot?.number}
+                                 </div>
+                              );
+                           })}
+                           {selectedSlotIds.size > 3 && (
+                              <div className="w-8 h-8 rounded-lg bg-slate-800 border border-white/10 flex items-center justify-center text-[10px] font-black text-white">
+                                 +{selectedSlotIds.size - 3}
+                              </div>
+                           )}
+                        </div>
+                     </div>
+
+                     <div className="space-y-3">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Grid Management Protocol</label>
+                        <div className="grid grid-cols-1 gap-3">
+                           <button
+                              onClick={() => {
+                                 setBlockTargetStatus('blocked');
+                                 setBlockOptions({...blockOptions, type: 'permanent', duration: 'permanent'});
+                              }}
+                              className={`flex items-center justify-between px-6 py-4 rounded-2xl border-2 transition-all ${
+                                 blockOptions.type === 'permanent' ? 'bg-brand-primary/10 border-brand-primary text-brand-primary' : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10'
+                              }`}
+                           >
+                              <div className="flex items-center gap-3">
+                                 <div className={`p-3 rounded-xl ${blockOptions.type === 'permanent' ? 'bg-brand-primary text-background-deep' : 'bg-white/5'}`}>
+                                    <ShieldCheck size={20} />
+                                 </div>
+                                 <div className="text-left">
+                                    <p className="text-xs font-black uppercase tracking-widest">Permanent Lockdown</p>
+                                    <p className="text-[9px] opacity-60 font-medium">Decommission node from primary index</p>
+                                 </div>
+                              </div>
+                              {blockOptions.type === 'permanent' && <CheckCircle2 size={16} />}
+                           </button>
+
+                           <button
+                              onClick={() => {
+                                 setBlockTargetStatus('maintenance');
+                                 setBlockOptions({...blockOptions, type: 'maintenance'});
+                              }}
+                              className={`flex items-center justify-between px-6 py-4 rounded-2xl border-2 transition-all ${
+                                 blockOptions.type === 'maintenance' ? 'bg-amber-500/10 border-amber-500 text-amber-500' : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10'
+                              }`}
+                           >
+                              <div className="flex items-center gap-3">
+                                 <div className={`p-3 rounded-xl ${blockOptions.type === 'maintenance' ? 'bg-amber-500 text-slate-900' : 'bg-white/5'}`}>
+                                    <Activity size={20} />
+                                 </div>
+                                 <div className="text-left">
+                                    <p className="text-xs font-black uppercase tracking-widest">Tactical Maintenance</p>
+                                    <p className="text-[9px] opacity-60 font-medium">Scheduled offline window for hardware sync</p>
+                                 </div>
+                              </div>
+                              {blockOptions.type === 'maintenance' && <CheckCircle2 size={16} />}
+                           </button>
+
+                           <button
+                              onClick={() => {
+                                 setBlockTargetStatus('blocked');
+                                 setBlockOptions({...blockOptions, type: 'cancellation', duration: 'permanent'});
+                              }}
+                              className={`flex items-center justify-between px-6 py-4 rounded-2xl border-2 transition-all ${
+                                 blockOptions.type === 'cancellation' ? 'bg-red-500/10 border-red-500 text-red-500' : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10'
+                              }`}
+                           >
+                              <div className="flex items-center gap-3">
+                                 <div className={`p-3 rounded-xl ${blockOptions.type === 'cancellation' ? 'bg-red-500 text-white' : 'bg-white/5'}`}>
+                                    <XCircle size={20} />
+                                 </div>
+                                 <div className="text-left">
+                                    <p className="text-xs font-black uppercase tracking-widest">Force Cancellation</p>
+                                    <p className="text-[9px] opacity-60 font-medium">Terminate session & isolate node</p>
+                                 </div>
+                              </div>
+                              {blockOptions.type === 'cancellation' && <CheckCircle2 size={16} />}
+                           </button>
+                        </div>
+                     </div>
+
+                     {blockOptions.type === 'maintenance' && (
+                        <div className="space-y-4 animate-in fade-in slide-in-from-top-2 bg-white/5 p-6 rounded-3xl border border-white/5">
+                           <div className="flex items-center justify-between">
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Maintenance Duration</label>
+                              <p className="text-[9px] font-black text-emerald-500 uppercase">Auto-Reversion Enabled</p>
+                           </div>
+                           <div className="grid grid-cols-4 gap-2">
+                              {[
+                                 { label: 'Short', val: '1h', icon: <Clock size={12} /> },
+                                 { label: 'Long', val: '4h', icon: <Clock size={12} /> },
+                                 { label: 'Day', val: 'day', icon: <Calendar size={12} /> },
+                                 { label: 'Inf.', val: 'permanent', icon: <ShieldCheck size={12} /> }
+                              ].map(dur => (
+                                 <button
+                                    key={`dur-opt-${dur.val}`}
+                                    onClick={() => setBlockOptions({...blockOptions, duration: dur.val})}
+                                    className={`px-2 py-3 rounded-xl flex flex-col items-center gap-2 border transition-all ${
+                                       blockOptions.duration === dur.val ? 'bg-emerald-500 text-slate-900 border-emerald-500' : 'bg-white/5 border-transparent text-slate-500'
+                                    }`}
+                                 >
+                                    {dur.icon}
+                                    <span className="text-[9px] font-black uppercase tracking-tighter">{dur.label}</span>
+                                 </button>
+                              ))}
+                           </div>
+                           
+                           <div className="flex gap-2">
+                              <button 
+                                 onClick={() => setBlockOptions({...blockOptions, duration: 'custom'})}
+                                 className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${
+                                    blockOptions.duration === 'custom' ? 'bg-emerald-500/20 border-emerald-500 text-emerald-500' : 'bg-white/5 border-transparent text-slate-500'
+                                 }`}
+                              >
+                                 Custom Duration
+                              </button>
+                           </div>
+                           
+                           {blockOptions.duration === 'custom' && (
+                              <div className="flex items-center gap-3 mt-2 animate-in fade-in">
+                                 <input 
+                                    type="number"
+                                    placeholder="Neural hours..."
+                                    className="flex-1 bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white text-xs outline-none focus:border-emerald-500"
+                                    onChange={(e) => {
+                                       const val = e.target.value;
+                                       setBlockOptions(prev => ({...prev, customHours: val}));
+                                    }}
+                                 />
+                                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Hours</span>
+                              </div>
+                           )}
+                        </div>
+                      )}
+                      
+                      {/* removed justification section */}
+                  </div>
+
+                  <div className="pt-4 space-y-3">
+                     <button 
+                        onClick={() => {
+                           const mappedStatus: SlotStatus = blockOptions.type === 'maintenance' ? 'maintenance' : 'blocked';
+                           handleBulkUpdate(mappedStatus, blockOptions);
+                        }}
+                        className="w-full h-16 rounded-[2rem] font-display font-black uppercase tracking-[0.2em] text-sm shadow-2xl transition-all flex items-center justify-center gap-3 overflow-hidden relative group bg-brand-primary text-background-deep shadow-brand-primary/40 hover:scale-[1.02] active:scale-[0.98]"
+                     >
+                        <div className="flex items-center gap-3 relative z-10">
+                           <ShieldCheck size={18} className="group-hover:rotate-12 transition-transform" />
+                           <span>{blockOptions.type === 'cancellation' ? 'Authorize Force Cancellation' : 
+                            blockOptions.type === 'maintenance' ? 'Execute Tactical Maintenance' : 
+                            'Authorize Permanent Lockdown'} ({selectedSlotIds.size})</span>
+                        </div>
+                        <motion.div 
+                           className="absolute inset-0 bg-white/20"
+                           initial={{ x: '-100%' }}
+                           animate={{ x: '100%' }}
+                           transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
+                        />
+                     </button>
+                     <p className="text-center text-[9px] font-black text-slate-500 uppercase tracking-[0.3em]">
+                        All actions are logged to administrative registry
+                     </p>
+                  </div>
+               </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </AnimatePresence>
     </motion.div>
   );

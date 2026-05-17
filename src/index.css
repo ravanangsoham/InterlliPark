@@ -6,17 +6,17 @@
   --font-display: "Outfit", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   
-  --color-brand-primary: #3b82f6;
-  --color-brand-secondary: #2563eb;
-  --color-brand-accent: #60a5fa;
-  --color-brand-dark: #000000;
+  --color-brand-primary: #a3e635;
+  --color-brand-secondary: #84cc16;
+  --color-brand-accent: #bef264;
+  --color-brand-dark: #1a2e05;
   --color-background-deep: var(--bg-deep);
   --color-glass-surface: var(--glass-surface);
   --color-glass-border: var(--glass-border);
 }
 
 :root {
-  --bg-deep: #ffffff;
+  --bg-deep: #f8fafc;
   --glass-surface: rgba(248, 250, 252, 0.8);
   --glass-border: rgba(15, 23, 42, 0.05);
   --text-main: #0f172a;
@@ -24,23 +24,29 @@
 
 .dark {
   --bg-deep: #020617;
-  --glass-surface: rgba(15, 23, 42, 0.8);
-  --glass-border: rgba(255, 255, 255, 0.05);
+  --glass-surface: rgba(10, 15, 30, 0.7);
+  --glass-border: rgba(163, 230, 53, 0.1);
   --text-main: #f1f5f9;
 }
 
 @layer base {
   body {
-    @apply bg-background-deep text-black dark:text-white font-sans antialiased overflow-x-hidden transition-colors duration-300;
+    @apply bg-background-deep text-slate-900 dark:text-slate-100 font-sans antialiased overflow-x-hidden transition-colors duration-300;
     -webkit-tap-highlight-color: transparent;
   }
   
+  * {
+    @apply border-slate-200 dark:border-white/10;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-brand-primary) transparent;
+  }
+
   h1, h2, h3, h4 {
-    @apply font-display font-bold tracking-tight text-black dark:text-white transition-colors duration-300;
+    @apply font-display font-bold tracking-tight text-slate-900 dark:text-white transition-colors duration-300;
   }
 
   .mono-data {
-    @apply font-mono text-sm tracking-tight text-black dark:text-slate-400;
+    @apply font-mono text-sm tracking-tight text-brand-primary;
   }
 }
 
@@ -57,7 +63,7 @@
 }
 
 .card-premium {
-  @apply glass-morphism rounded-[2.5rem] p-8 shadow-2xl shadow-brand-primary/5 transition-all duration-500 hover:scale-[1.01] border-slate-200/50 dark:border-white/[0.03];
+  @apply glass-morphism rounded-[2.5rem] p-8 shadow-2xl shadow-brand-primary/5 transition-all duration-500 hover:scale-[1.01] border-slate-300 dark:border-white/[0.03];
 }
 
 .button-primary {
@@ -65,7 +71,7 @@
 }
 
 .badge {
-  @apply px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-black dark:text-slate-400;
+  @apply px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border border-slate-300 dark:border-white/10 bg-white dark:bg-white/5 text-slate-900 dark:text-slate-200;
 }
 
 @keyframes float {

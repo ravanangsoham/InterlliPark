@@ -25,7 +25,7 @@ export default function Locations({ activeLocation, onSelect }: LocationsProps) 
       className="space-y-6"
     >
       <header className="px-1 text-center">
-        <h1 className="text-2xl font-display font-bold text-slate-900">Select Location</h1>
+        <h1 className="text-2xl font-display font-bold text-slate-900 dark:text-white">Select Location</h1>
         <p className="text-slate-400 text-sm font-medium">Find the nearest IntelliPark spot</p>
       </header>
 
@@ -42,7 +42,7 @@ export default function Locations({ activeLocation, onSelect }: LocationsProps) 
       <div className="space-y-4">
         {MOCK_LOCATIONS.map((location, idx) => (
           <motion.button
-            key={location.id}
+            key={`location-card-${location.id}-${idx}`}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: idx * 0.1 }}
@@ -56,7 +56,7 @@ export default function Locations({ activeLocation, onSelect }: LocationsProps) 
             <div className="flex justify-between items-start mb-4">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
-                   <h3 className="text-lg font-display font-bold leading-tight text-slate-900">
+                   <h3 className="text-lg font-display font-bold leading-tight text-slate-900 dark:text-white">
                     {location.name}
                   </h3>
                   {activeLocation.id === location.id && (
@@ -71,7 +71,7 @@ export default function Locations({ activeLocation, onSelect }: LocationsProps) 
                 </div>
               </div>
               <div className="flex flex-col items-end gap-1">
-                 <span className="text-[10px] font-bold text-slate-900 bg-slate-50 dark:bg-white/10 px-2 py-1 rounded-lg">
+                 <span className="text-[10px] font-bold text-slate-900 dark:text-white bg-slate-50 dark:bg-white/10 px-2 py-1 rounded-lg">
                     {location.distance}
                  </span>
                  <div className="flex items-center gap-1 text-orange-400">
@@ -85,7 +85,7 @@ export default function Locations({ activeLocation, onSelect }: LocationsProps) 
                <div className="flex gap-4">
                  <div className="space-y-0.5">
                     <p className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest leading-none">Starting From</p>
-                    <p className="text-sm font-display font-bold text-slate-900">₹{location.prices.Bike}/hr</p>
+                    <p className="text-sm font-display font-bold text-slate-900 dark:text-white">₹{location.prices.Bike}/hr</p>
                  </div>
                  <div className="space-y-0.5">
                     <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest leading-none">Available</p>

@@ -4,7 +4,7 @@
  */
 
 export type VehicleType = 'Bike' | '4-Wheeler' | 'Tempo' | 'Truck';
-export type SlotStatus = 'available' | 'reserved' | 'occupied' | 'blocked';
+export type SlotStatus = 'available' | 'reserved' | 'occupied' | 'blocked' | 'maintenance' | 'out_of_service';
 
 export interface Vehicle {
   id: string;
@@ -15,6 +15,8 @@ export interface Vehicle {
   phone: string;
 }
 
+export type BlockType = 'permanent' | 'maintenance' | 'temporary' | 'manual_override' | 'cancellation';
+
 export interface Slot {
   id: string;
   number: string;
@@ -22,7 +24,15 @@ export interface Slot {
   type: VehicleType;
   status: SlotStatus;
   currentBookingId?: string;
+  currentVehicleType?: VehicleType;
   locationId?: string;
+  blockMetadata?: {
+    type: BlockType;
+    comment?: string;
+    blockedAt?: number;
+    blockedUntil?: number;
+    duration?: string; // '1h', '4h', 'day', 'permanent'
+  };
 }
 
 export interface Location {

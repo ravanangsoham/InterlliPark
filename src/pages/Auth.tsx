@@ -11,6 +11,7 @@ import {
 import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { ArrowLeft, User, Mail, Lock, Sparkles, Loader2, Chrome } from 'lucide-react';
+import { DEVELOPER_EMAILS } from '../constants';
 
 export default function Auth() {
   const { role } = useParams();
@@ -20,13 +21,37 @@ export default function Auth() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [typoWarning, setTypoWarning] = useState('');
 
-  const devEmails = [
-    'ravanangsoham2007@gmail.com', 
-    'ravanangsoham@gmail.com', 
-    'sanika7777@gmail.com', 
-    'mitadmin1@gmail.com'
-  ].map(e => e.toLowerCase().trim());
+  const commonTypos: Record<string, string> = {
+    'gamil.com': 'gmail.com',
+    'gmal.com': 'gmail.com',
+    'gmali.com': 'gmail.com',
+    'hotmal.com': 'hotmail.com',
+    'outlok.com': 'outlook.com',
+    'yaho.com': 'yahoo.com'
+  };
+
+  const checkEmailTypo = (value: string) => {
+    const domain = value.split('@')[1]?.toLowerCase();
+    if (domain && commonTypos[domain]) {
+      const suggestion = commonTypos[domain];
+      const suggestedEmail = `${value.split('@')[0]}@${suggestion}`;
+      setTypoWarning(`Did you mean ${suggestedEmail}? Click to fix.`);
+    } else {
+      setTypoWarning('');
+    }
+  };
+
+  const useTypoFix = () => {
+    const domain = email.split('@')[1]?.toLowerCase();
+    if (domain && commonTypos[domain]) {
+      const suggestion = commonTypos[domain];
+      const fixed = `${email.split('@')[0]}@${suggestion}`;
+      setEmail(fixed);
+      setTypoWarning('');
+    }
+  };
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
@@ -36,7 +61,7 @@ export default function Auth() {
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
       const normalizedEmail = user.email?.toLowerCase().trim() || '';
-      const isDeveloper = devEmails.some(e => e.toLowerCase().trim() === normalizedEmail);
+      const isDeveloper = DEVELOPER_EMAILS.includes(normalizedEmail);
       
       const userDocRef = doc(db, 'users', user.uid);
       const userDoc = await getDoc(userDocRef);
@@ -47,23 +72,24 @@ export default function Auth() {
         await setDoc(userDocRef, {
           email: normalizedEmail,
           role: assignedRole,
+          isBlocked: false,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         });
-      } else if (isDeveloper && userDoc.data().role !== 'admin') {
+      } else if (isDeveloper && userDoc.data()?.role !== 'admin') {
         await updateDoc(userDocRef, { role: 'admin', updatedAt: serverTimestamp() });
       }
 
       navigate(assignedRole === 'admin' ? '/admin' : '/');
     } catch (err: any) {
-      console.error('Google Auth Error:', err);
-      if (err.code === 'auth/popup-closed-by-user') {
-        setError('Verification popup was closed. Please try again and complete the sign-in.');
-      } else if (err.code === 'auth/cancelled-by-user') {
-        setError('Sign-in cancelled. Use a Google account to proceed.');
-      } else {
-        setError(err.message || 'Identity verification sequence failed.');
+      // Don't log or show an error if the user closed the popup - it's expected behavior
+      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-by-user') {
+        setLoading(false);
+        return;
       }
+
+      console.error('Google Auth Error:', err);
+      setError(err.message || 'Identity verification sequence failed.');
     } finally {
       setLoading(false);
     }
@@ -97,37 +123,27 @@ export default function Auth() {
 
     try {
       const normalizedEmail = email.toLowerCase().trim();
-      const isDeveloper = devEmails.some(e => e.toLowerCase().trim() === normalizedEmail);
+      const isDeveloper = DEVELOPER_EMAILS.includes(normalizedEmail);
       console.log('Auth Attempt:', { email: normalizedEmail, role, isDeveloper, isSignIn });
 
       if (isSignIn) {
         // --- SIGN IN FLOW ---
-        let userCredential;
-        try {
-          userCredential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
-        } catch (authErr: any) {
-          console.error('Core Auth Error:', authErr);
-          if (authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/invalid-login-credentials' || authErr.code === 'auth/user-not-found' || authErr.code === 'auth/wrong-password') {
-            throw new Error('Verification Failure: Incorrect credentials or unauthorized grid access. Please check your credentials.');
-          }
-          throw authErr;
-        }
-
+        const userCredential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
         const userDocRef = doc(db, 'users', userCredential.user.uid);
         
         let userDoc;
         try {
           userDoc = await getDoc(userDocRef);
         } catch (fErr) {
-          handleFirestoreError(fErr, OperationType.GET, `users/${userCredential.user.uid}`);
+          console.error("User doc fetch failed:", fErr);
         }
         
         if (userDoc && userDoc.exists()) {
           const userData = userDoc.data();
           let userRole = userData.role;
 
-          // Auto-promote developer to admin if logging into the admin portal
-          if (isDeveloper && role === 'admin' && userRole !== 'admin') {
+          // Auto-promote developer to admin
+          if (isDeveloper && userRole !== 'admin') {
             try {
               await updateDoc(userDocRef, { role: 'admin', updatedAt: serverTimestamp() });
               userRole = 'admin';
@@ -136,33 +152,32 @@ export default function Auth() {
             }
           }
 
-          // Validation
-          if (userRole !== role && !isDeveloper && role === 'admin') {
-            throw new Error(`Cloud Access Restricted. Your Identity Hash is registered as a: ${userRole}. Contact an administrator for elevation.`);
+          // Strict role check for non-developers attempting to enter admin portal
+          if (userRole !== 'admin' && !isDeveloper && role === 'admin') {
+            await auth.signOut();
+            throw new Error(`Cloud Access Restricted. Your Identity Hash is registered as a standard User. Contact central command for elevation.`);
           }
-          
-          navigate(role === 'admin' ? '/admin' : '/');
         } else {
-          // Document missing - create it automatically
+          // Document missing - create it
           const assignedRole = (role === 'admin' || isDeveloper) ? 'admin' : 'user';
-          
           try {
             await setDoc(userDocRef, {
               email: normalizedEmail,
               role: assignedRole,
+              isBlocked: false,
               createdAt: serverTimestamp(),
               updatedAt: serverTimestamp()
             });
           } catch (sErr) {
-            handleFirestoreError(sErr, OperationType.CREATE, `users/${userCredential.user.uid}`);
+            console.error("Doc creation failed:", sErr);
           }
-          
-          navigate(assignedRole === 'admin' ? '/admin' : '/');
         }
+        
+        navigate(role === 'admin' ? '/admin' : '/');
       } else {
         // --- SIGN UP FLOW ---
         if (role === 'admin' && !isDeveloper) {
-          throw new Error("Administrative protocols require central authorization. Please register as a standard User first via the toggle above.");
+          throw new Error("Administrative protocols require central authorization. Please register as a standard User first.");
         }
         
         const userCredential = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
@@ -172,45 +187,62 @@ export default function Auth() {
           await setDoc(doc(db, 'users', userCredential.user.uid), {
             email: normalizedEmail,
             role: assignedRole,
+            isBlocked: false,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp()
           });
         } catch (sErr) {
-          handleFirestoreError(sErr, OperationType.CREATE, `users/${userCredential.user.uid}`);
+          console.error("Signup doc creation failed:", sErr);
         }
         
         navigate(assignedRole === 'admin' ? '/admin' : '/');
       }
     } catch (err: any) {
-      console.error('Auth Hub Error:', err);
-      // Try to extract readable error if it's a JSON string from handleFirestoreError
+      // Only log unexpected errors
+      const expectedCodes = [
+        'auth/invalid-credential', 
+        'auth/invalid-login-credentials', 
+        'auth/user-not-found', 
+        'auth/wrong-password', 
+        'auth/user-disabled', 
+        'auth/email-already-in-use', 
+        'auth/weak-password', 
+        'auth/network-request-failed',
+        'auth/invalid-email'
+      ];
+
+      if (!expectedCodes.includes(err.code)) {
+        console.error('Auth Pipeline Error:', err);
+      }
+      
       let displayError = err.message || 'An unexpected authentication error occurred.';
       try {
-        if (displayError.startsWith('{')) {
+        if (typeof displayError === 'string' && displayError.startsWith('{')) {
           const parsed = JSON.parse(displayError);
           displayError = parsed.error || displayError;
         }
       } catch (e) {
-        // Not JSON, keep original
+        // Not JSON
       }
 
-      if (err.code === 'auth/operation-not-allowed') {
-        setError('Login method disabled. Check Firebase console.');
-      } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/invalid-login-credentials' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
-        setError('Verification Failure: Incorrect credentials or unauthorized grid access.');
-      } else if (err.code === 'auth/email-already-in-use') {
-        setError('This email is already registered in the grid. Please Sign In instead.');
-      } else if (err.code === 'auth/weak-password') {
-        setError('Security risk: Password must be at least 6 characters.');
+      // Map Firebase codes to user-friendly messages
+      const errorMap: Record<string, string> = {
+        'auth/invalid-credential': 'Verification Failure: Incorrect credentials or unauthorized access. Please check your email/password.',
+        'auth/invalid-login-credentials': 'Verification Failure: Incorrect credentials or unauthorized access.',
+        'auth/user-not-found': 'Identity Not Found. Please verify your email or register a new account.',
+        'auth/wrong-password': 'Access Denied. The password provided is incorrect for this identity.',
+        'auth/invalid-email': 'Invalid ID Format. Please enter a valid email address.',
+        'auth/user-disabled': 'Access Revoked. This account has been disabled by central administration.',
+        'auth/email-already-in-use': 'Identity Conflict. This email is already registered. Please Sign In instead.',
+        'auth/weak-password': 'Security Violation: Password must be at least 6 characters.',
+        'auth/operation-not-allowed': 'Protocol Disabled: This login method is currently inactive.',
+        'auth/network-request-failed': 'Link Interrupted: Connection to core servers failed. Check your internet.'
+      };
+
+      if (err.code && errorMap[err.code]) {
+        setError(errorMap[err.code]);
       } else {
         setError(displayError);
-      }
-
-      // Special handling for specific codes to provide better UX
-      if (err.code === 'auth/network-request-failed') {
-        setError('GRID OFFLINE: The link to the parsing servers is interrupted. Please verify your internet connection or check if a firewall is blocking "firebase.googleapis.com".');
-      } else if (err.code === 'auth/email-already-in-use') {
-        setError('LINK EXISTS: This ID hash already exists. Please tap "Sync Session" below to Sign In instead of registering.');
       }
     } finally {
       setLoading(false);
@@ -226,7 +258,7 @@ export default function Auth() {
         >
           <ArrowLeft size={20} />
         </button>
-        <h1 className="text-2xl font-display font-bold text-black capitalize tracking-tight">{role} Portal</h1>
+        <h1 className="text-2xl font-display font-bold text-black dark:text-white capitalize tracking-tight">{role} Portal</h1>
       </header>
 
       <motion.div 
@@ -252,10 +284,10 @@ export default function Auth() {
         </div>
 
         <div className="space-y-4 mb-12 text-center">
-          <h2 className="text-5xl font-display font-black text-black tracking-tighter transition-all">
+          <h2 className="text-5xl font-display font-black text-black dark:text-white tracking-tighter transition-all">
             {isSignIn ? (role === 'admin' ? 'Admin Access' : 'Neural Login') : (role === 'admin' ? 'Elevate Role' : 'Grid ID')}
           </h2>
-          <p className="text-black text-[11px] font-black uppercase tracking-[0.45em] opacity-80">
+          <p className="text-black dark:text-white text-[11px] font-black uppercase tracking-[0.45em] opacity-80">
             {isSignIn 
               ? `Authorized entry into ${role} sector` 
               : `Sequencing new ${role} hash in the grid`}
@@ -292,13 +324,28 @@ export default function Auth() {
                 <input 
                   type="email"
                   value={email}
-                  onChange={e => setEmail(e.target.value)}
+                  onChange={e => {
+                    setEmail(e.target.value);
+                    checkEmailTypo(e.target.value);
+                  }}
                   autoComplete="email"
-                  className="w-full bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-white/5 rounded-[1.5rem] py-5 pl-14 pr-6 outline-none focus:border-brand-primary/30 transition-all font-medium text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-700 shadow-inner"
+                  className={`w-full bg-slate-100 dark:bg-slate-900/50 border rounded-[1.5rem] py-5 pl-14 pr-6 outline-none transition-all font-medium text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-700 shadow-inner ${typoWarning ? 'border-amber-500/50 focus:border-amber-500' : 'border-slate-200 dark:border-white/5 focus:border-brand-primary/30'}`}
                   placeholder="name@example.com"
                   required
                 />
               </div>
+              {typoWarning && (
+                <motion.button 
+                  type="button"
+                  onClick={useTypoFix}
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  className="w-full text-[10px] font-black text-amber-500 uppercase tracking-widest px-1 flex items-center gap-2 hover:text-amber-400 transition-colors"
+                >
+                  <Sparkles size={12} className="animate-pulse" />
+                  {typoWarning}
+                </motion.button>
+              )}
             </div>
 
             <div className="space-y-3">

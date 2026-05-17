@@ -84,28 +84,28 @@ export default function History({ tickets, vehicles }: HistoryProps) {
       className="space-y-6"
     >
       <header className="px-1">
-        <h1 className="text-2xl font-display font-black text-black transition-colors">History</h1>
-        <p className="text-black text-sm font-black uppercase tracking-wider">Your recent parking sessions</p>
+        <h1 className="text-2xl font-display font-black text-black dark:text-white transition-colors">History</h1>
+        <p className="text-slate-900 dark:text-slate-400 text-sm font-black uppercase tracking-wider">Your recent parking sessions</p>
       </header>
 
       <div className="space-y-3 pb-10">
         {tickets.length === 0 ? (
           <div className="bg-white dark:bg-slate-900 p-12 rounded-3xl border border-slate-50 dark:border-white/5 flex flex-col items-center justify-center text-center space-y-4 shadow-sm">
-            <div className="w-16 h-16 rounded-full bg-slate-50 dark:bg-white/5 flex items-center justify-center text-black">
+            <div className="w-16 h-16 rounded-full bg-slate-50 dark:bg-white/5 flex items-center justify-center text-black dark:text-white">
               <Clock size={32} />
             </div>
             <div>
-              <p className="text-black font-display font-bold">No History Yet</p>
-              <p className="text-black/60 text-xs">Your parking sessions will appear here</p>
+              <p className="text-black dark:text-white font-display font-bold">No History Yet</p>
+              <p className="text-black/60 dark:text-white/60 text-xs">Your parking sessions will appear here</p>
             </div>
           </div>
         ) : (
             tickets.slice().map((ticket, idx) => {
             const statusColor = 
-              ticket.status === 'active' ? 'text-black bg-brand-primary/20 border-black/10' : 
-              ticket.status === 'reserved' ? 'text-black bg-emerald-500/20 border-emerald-600/20' :
-              ticket.status === 'cancelled' ? 'text-black bg-red-500/20 border-red-600/20' :
-              'text-black bg-slate-100 dark:bg-white/5 border-slate-200';
+              ticket.status === 'active' ? 'text-black dark:text-brand-primary bg-brand-primary/20 border-black/10' : 
+              ticket.status === 'reserved' ? 'text-black dark:text-emerald-500 bg-emerald-500/20 border-emerald-600/20' :
+              ticket.status === 'cancelled' ? 'text-black dark:text-red-500 bg-red-500/20 border-red-600/20' :
+              'text-black dark:text-white bg-slate-100 dark:bg-white/5 border-slate-200';
             
             const statusLabel = 
               ticket.status === 'active' ? 'Ongoing' : 
@@ -115,7 +115,7 @@ export default function History({ tickets, vehicles }: HistoryProps) {
 
             return (
               <motion.div
-                key={ticket.id}
+                key={`history-ticket-${ticket.id}-${idx}`}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.05 }}
@@ -123,16 +123,16 @@ export default function History({ tickets, vehicles }: HistoryProps) {
               >
                 <div className="flex justify-between items-start mb-4">
                    <div className="flex items-center gap-3">
-                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${
                         ticket.status === 'active' ? 'bg-brand-primary text-black' : 
                         ticket.status === 'reserved' ? 'bg-emerald-500 text-black' :
-                        'bg-slate-100 dark:bg-white/5 text-black'
+                        'bg-slate-100 dark:bg-white/5 text-black dark:text-white'
                       }`}>
                          <Hash size={24} />
                       </div>
                       <div>
-                          <h3 className="text-lg font-mono font-black text-black uppercase transition-colors">{(ticket as any).vehicleNumber || 'UNKNOWN'}</h3>
-                           <p className="text-[10px] text-black font-black uppercase tracking-wider">{(ticket as any).vehicleType || 'Vehicle'} • Slot {(ticket as any).slotNumber || ticket.slotId}</p>
+                          <h3 className="text-lg font-mono font-black text-black dark:text-white uppercase transition-colors">{(ticket as any).vehicleNumber || 'UNKNOWN'}</h3>
+                           <p className="text-[10px] text-slate-800 dark:text-slate-400 font-black uppercase tracking-wider">{(ticket as any).vehicleType || 'Vehicle'} • Slot {(ticket as any).slotNumber || ticket.slotId}</p>
                        </div>
                     </div>
                     <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${statusColor}`}>
@@ -143,18 +143,18 @@ export default function History({ tickets, vehicles }: HistoryProps) {
                  <div className="flex justify-between items-center pt-4 border-t border-slate-200 dark:border-white/10">
                     <div className="flex gap-4">
                        <div className="space-y-1">
-                          <p className="text-[10px] text-black font-black uppercase tracking-[0.2em] leading-none">Date</p>
-                          <p className="text-sm font-black text-black transition-colors">{ticket.startTime ? new Date(ticket.startTime).toLocaleDateString() : '---'}</p>
+                          <p className="text-[10px] text-black dark:text-white font-black uppercase tracking-[0.2em] leading-none">Date</p>
+                          <p className="text-sm font-black text-black dark:text-white transition-colors">{ticket.startTime ? new Date(ticket.startTime).toLocaleDateString() : '---'}</p>
                        </div>
                        <div className="space-y-1">
-                          <p className="text-[10px] text-black font-black uppercase tracking-[0.2em] leading-none">Time</p>
-                          <p className="text-sm font-black text-black transition-colors">{ticket.startTime ? new Date(ticket.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '---'}</p>
+                          <p className="text-[10px] text-black dark:text-white font-black uppercase tracking-[0.2em] leading-none">Time</p>
+                          <p className="text-sm font-black text-black dark:text-white transition-colors">{ticket.startTime ? new Date(ticket.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '---'}</p>
                        </div>
                     </div>
                     <div className="flex items-center gap-4">
                        <div className="text-right">
-                          <p className="text-[10px] text-black font-black uppercase tracking-widest leading-none mb-0.5">Amount</p>
-                          <p className="text-xl font-display font-black text-black transition-colors">₹{ticket.totalAmount || 0}</p>
+                          <p className="text-[10px] text-black dark:text-white font-black uppercase tracking-widest leading-none mb-0.5">Amount</p>
+                          <p className="text-xl font-display font-black text-black dark:text-white transition-colors">₹{ticket.totalAmount || 0}</p>
                        </div>
                       {ticket.status === 'active' && (
                         <button

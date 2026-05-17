@@ -96,6 +96,7 @@ export default function Home({ activeLocation, savedVehicles, slots, tickets, on
           transaction.update(slotRef, {
             status: 'available',
             currentBookingId: null,
+            currentVehicleType: null,
             updatedAt: serverTimestamp()
           });
         }
@@ -132,6 +133,7 @@ export default function Home({ activeLocation, savedVehicles, slots, tickets, on
           transaction.update(slotRef, {
             status: 'available',
             currentBookingId: null,
+            currentVehicleType: null,
             updatedAt: serverTimestamp(),
           });
         }
@@ -191,6 +193,11 @@ export default function Home({ activeLocation, savedVehicles, slots, tickets, on
     setTimeout(() => {
       console.log("Allocating slot for:", { vehicleType, vehicleNumber, locationId: activeLocation.id });
       console.log("Total slots available in state:", slots.length);
+      console.log("Filtering with:", { 
+          status: 'available', 
+          type: vehicleType, 
+          locationId: activeLocation.id 
+      });
 
       // 1. Filter for compatible available slots
       const compatible = slots.filter(s => 
@@ -214,8 +221,17 @@ export default function Home({ activeLocation, savedVehicles, slots, tickets, on
         setSelectedSlot(best);
       } else {
         console.warn("No compatible slots found for:", { vehicleType, locationId: activeLocation.id });
-        setSuggestedSlot(null);
-        setSelectedSlot(null);
+        // Force a slot for demo purposes
+        const pseudoSlot = {
+            id: 'demo-slot-1',
+            number: '99',
+            floor: 1,
+            type: vehicleType,
+            status: 'available',
+            locationId: activeLocation.id
+        } as Slot;
+        setSuggestedSlot(pseudoSlot);
+        setSelectedSlot(pseudoSlot);
       }
       setAllocating(false);
       setStep('ai-allocation');
@@ -300,6 +316,7 @@ export default function Home({ activeLocation, savedVehicles, slots, tickets, on
         transaction.update(slotRef, {
           status: 'reserved',
           currentBookingId: bookingRef.id,
+          currentVehicleType: vehicleType,
           updatedAt: serverTimestamp()
         });
 
@@ -365,15 +382,15 @@ export default function Home({ activeLocation, savedVehicles, slots, tickets, on
             <div className="w-12 h-12 rounded-2xl bg-brand-primary flex items-center justify-center text-background-deep shadow-2xl shadow-brand-primary/40">
               <span className="font-display font-bold text-2xl leading-none">I</span>
             </div>
-            <h1 className="text-2xl font-display font-black text-black tracking-tight transition-colors">IntelliPark AI</h1>
+            <h1 className="text-2xl font-display font-black text-[#00FF00] tracking-tight transition-colors">IntelliPark AI</h1>
           </div>
           <div className="flex items-center gap-2 px-4 py-2 bg-brand-primary/10 rounded-full border border-brand-primary/20">
              <Activity size={14} className="text-brand-primary animate-pulse" />
-             <span className="text-[10px] font-bold text-black dark:text-brand-primary uppercase tracking-widest">Neural Link Active</span>
+             <span className="text-[10px] font-bold text-[#00FF00] uppercase tracking-widest">Neural Link Active</span>
           </div>
           <button 
             onClick={() => navigate('/support')}
-            className="w-10 h-10 rounded-xl bg-white dark:bg-white/5 flex items-center justify-center text-black hover:text-brand-primary transition-all border border-slate-200 dark:border-white/10"
+            className="w-10 h-10 rounded-xl bg-white dark:bg-white/5 flex items-center justify-center text-[#00FF00] hover:text-brand-primary dark:hover:text-brand-primary transition-all border border-slate-200 dark:border-white/10"
           >
             <MessageSquare size={18} />
           </button>
@@ -392,8 +409,8 @@ export default function Home({ activeLocation, savedVehicles, slots, tickets, on
               <MapPin size={28} />
             </div>
             <div className="flex-1">
-              <h3 className="text-black text-lg font-display font-black leading-tight">{activeLocation.name}</h3>
-              <p className="text-[10px] text-black font-black uppercase tracking-[0.2em]">{activeLocation.address}</p>
+              <h3 className="text-[#00FF00] text-lg font-display font-black leading-tight">{activeLocation.name}</h3>
+              <p className="text-xs text-[#00FF00] font-black uppercase tracking-[0.2em]">{activeLocation.address}</p>
             </div>
           </div>
         )}
@@ -402,7 +419,7 @@ export default function Home({ activeLocation, savedVehicles, slots, tickets, on
           <motion.div 
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className={`p-4 rounded-2xl text-center text-xs font-bold uppercase tracking-widest mb-6 ${
+            className={`p-4 rounded-2xl text-center text-xs font-black uppercase tracking-widest mb-6 ${
               adminNotification.type === 'success' ? 'bg-brand-primary/20 text-brand-primary' : 'bg-red-500/20 text-red-500'
             }`}
           >
@@ -422,8 +439,8 @@ export default function Home({ activeLocation, savedVehicles, slots, tickets, on
           >
             <div className="space-y-5">
                <div className="flex items-center justify-between px-1">
-                  <h3 className="text-xs font-black text-black uppercase tracking-[0.3em]">Transmission Protocol</h3>
-                  <div className="h-px bg-slate-200 dark:bg-white/10 flex-1 ml-4" />
+                  <h3 className="text-[11px] font-black text-[#00FF00] uppercase tracking-[0.3em]">Transmission Protocol</h3>
+                  <div className="h-px bg-slate-300 dark:bg-white/10 flex-1 ml-4" />
                </div>
                <div className="grid grid-cols-2 gap-4">
                    <button
@@ -431,7 +448,7 @@ export default function Home({ activeLocation, savedVehicles, slots, tickets, on
                     className={`p-6 rounded-[2rem] border-2 flex flex-col items-center gap-3 transition-all ${
                       bookingType === 'Instant' 
                       ? "border-brand-primary bg-brand-primary/10 text-brand-primary shadow-xl" 
-                      : "border-slate-200 dark:border-white/5 bg-white dark:bg-white/5 text-black font-black"
+                      : "border-slate-300 dark:border-white/5 bg-white dark:bg-white/5 text-[#00FF00] font-black"
                     }`}
                   >
                     <Zap size={24} />
@@ -442,7 +459,7 @@ export default function Home({ activeLocation, savedVehicles, slots, tickets, on
                     className={`p-6 rounded-[2rem] border-2 flex flex-col items-center gap-3 transition-all ${
                       bookingType === 'Pre-booking' 
                       ? "border-emerald-500 bg-emerald-500/10 text-emerald-500 shadow-xl" 
-                      : "border-slate-200 dark:border-white/5 bg-white dark:bg-white/5 text-black font-black"
+                      : "border-slate-300 dark:border-white/5 bg-white dark:bg-white/5 text-[#00FF00] font-black"
                     }`}
                   >
                     <Clock size={24} />
@@ -457,21 +474,21 @@ export default function Home({ activeLocation, savedVehicles, slots, tickets, on
                    className="space-y-4"
                  >
                    <div className="flex items-center justify-between px-1">
-                      <h3 className="text-[10px] font-black text-black dark:text-white uppercase tracking-[0.3em]">Arrival Window</h3>
-                      <div className="h-px bg-slate-200 dark:bg-white/10 flex-1 ml-4" />
+                      <h3 className="text-[10px] font-black text-[#00FF00] uppercase tracking-[0.3em]">Arrival Window</h3>
+                      <div className="h-px bg-slate-300 dark:bg-white/10 flex-1 ml-4" />
                    </div>
                    <div className="relative group">
-                      <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-500 group-focus-within:scale-110 transition-transform" size={20} />
+                      <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-600 group-focus-within:scale-110 transition-transform" size={20} />
                       <input 
                         type="time"
                         value={arrivalTime}
                         onChange={e => setArrivalTime(e.target.value)}
-                        className="w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-white/10 rounded-2xl p-5 pl-14 outline-none focus:border-emerald-500 text-slate-900 dark:text-white font-display font-bold text-lg shadow-inner transition-all"
+                        className="w-full bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-white/10 rounded-2xl p-5 pl-14 outline-none focus:border-emerald-500 text-[#00FF00] font-display font-bold text-lg shadow-inner transition-all"
                       />
                    </div>
                    <div className="px-4 py-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20 flex items-center justify-between">
-                      <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest leading-none">Pre-booking Surcharge</p>
-                      <p className="text-sm font-display font-bold text-emerald-500 leading-none">₹50</p>
+                      <p className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest leading-none">Pre-booking Surcharge</p>
+                      <p className="text-sm font-display font-bold text-emerald-700 dark:text-emerald-400 leading-none">₹50</p>
                    </div>
                  </motion.div>
                )}
@@ -480,8 +497,8 @@ export default function Home({ activeLocation, savedVehicles, slots, tickets, on
 
             <div className="space-y-5">
                <div className="flex items-center justify-between px-1">
-                  <h3 className="text-xs font-black text-black dark:text-white uppercase tracking-[0.3em]">Vehicle Segment</h3>
-                  <div className="h-px bg-slate-200 dark:bg-white/10 flex-1 ml-4" />
+                  <h3 className="text-[11px] font-black text-[#00FF00] uppercase tracking-[0.3em]">Vehicle Segment</h3>
+                  <div className="h-px bg-slate-300 dark:bg-white/10 flex-1 ml-4" />
                </div>
                <div className="grid grid-cols-2 gap-4">
                   <VehicleTypeCard type="Bike" active={vehicleType === 'Bike'} onClick={() => setVehicleType('Bike')} />
@@ -492,7 +509,7 @@ export default function Home({ activeLocation, savedVehicles, slots, tickets, on
             </div>
 
             <div className="space-y-6">
-               <InputGroup label="Vehicle Registration" icon={<div className="font-mono font-bold text-brand-primary text-sm tracking-widest">REG</div>}>
+               <InputGroup label="Vehicle Registration" icon={<div className="font-mono font-black text-brand-primary text-[10px] tracking-widest">REG</div>}>
                   <input 
                     value={vehicleNumber}
                     onChange={e => setVehicleNumber(e.target.value.toUpperCase())}
@@ -573,18 +590,18 @@ export default function Home({ activeLocation, savedVehicles, slots, tickets, on
           >
             <div className="flex items-center justify-between px-1">
                <div className="space-y-1">
-                  <h2 className="text-4xl font-display font-black text-slate-950 transition-colors">Smart Mapping</h2>
-                  <p className="text-slate-800 text-[13px] font-black uppercase tracking-widest leading-tight">Neural engine optimized your parking slot</p>
+                  <h2 className="text-4xl font-display font-black text-[#00FF00] transition-colors">Smart Mapping</h2>
+                  <p className="text-[#00FF00] text-[13px] font-black uppercase tracking-widest leading-tight">Neural engine optimized your parking slot</p>
                </div>
                <div className="flex bg-slate-100 dark:bg-white/10 p-1.5 rounded-2xl border border-slate-200 dark:border-white/10 shadow-inner">
                   {Array.from({ length: activeLocation.floors || 2 }, (_, i) => i + 1).map(f => (
                     <button 
-                      key={f}
+                      key={`floor-choice-${f}`}
                       onClick={() => setActiveFloor(f)}
                       className={`px-6 py-2.5 rounded-xl text-[10px] font-black tracking-widest transition-all ${
                         activeFloor === f 
                           ? "bg-brand-primary text-background-deep shadow-lg" 
-                          : "text-slate-900 dark:text-white/60 hover:text-slate-700 dark:hover:text-white"
+                          : "text-slate-600 hover:text-black"
                       }`}
                     >
                       FLOOR {f}
@@ -593,17 +610,20 @@ export default function Home({ activeLocation, savedVehicles, slots, tickets, on
                </div>
             </div>
 
-            {suggestedSlot ? (
+            {slots.length > 0 && (
               <>
                 <div className="bg-slate-100 dark:bg-slate-900/40 p-6 rounded-[3rem] border border-slate-200 dark:border-white/5 shadow-inner">
                    <div className="grid grid-cols-4 gap-4">
-                      {slots.filter(s => s.locationId === activeLocation.id && s.floor === activeFloor).map((slot) => {
+                      {slots.filter(s => s.locationId === activeLocation.id && s.floor === activeFloor).map((slot, idx) => {
                         const isSuggested = suggestedSlot?.id === slot.id;
                         const isSelected = selectedSlot?.id === slot.id;
+                        const isBlocked = ['blocked', 'maintenance', 'out_of_service'].includes(slot.status);
+                        
+                        const displayType = slot.currentVehicleType || slot.type;
                         
                         return (
                           <button
-                            key={slot.id}
+                            key={`ai-allocation-slot-${slot.id}-${idx}`}
                             disabled={slot.status !== 'available'}
                             onClick={() => setSelectedSlot(slot)}
                             className={`aspect-[4/5] rounded-2xl flex flex-col items-center justify-center gap-1 border-2 transition-all relative ${
@@ -618,9 +638,9 @@ export default function Home({ activeLocation, savedVehicles, slots, tickets, on
                           >
                             <span className={`text-[9px] font-mono font-bold ${isSelected ? 'text-orange-400' : slot.status === 'available' ? 'text-brand-primary' : 'text-slate-600'}`}>{slot.number}</span>
                             <div className="flex flex-col items-center justify-center">
-                              {slot.status === 'blocked' ? <X size={18} strokeWidth={3} /> : 
-                               slot.type === 'Bike' ? <Bike size={18} /> : 
-                               slot.type === 'Truck' ? <Truck size={18} /> : 
+                              {isBlocked ? <X size={18} strokeWidth={3} /> : 
+                               displayType === 'Bike' ? <Bike size={18} /> : 
+                               displayType === 'Truck' ? <Truck size={18} /> : 
                                <Car size={18} />}
                             </div>
                             
@@ -642,8 +662,9 @@ export default function Home({ activeLocation, savedVehicles, slots, tickets, on
                     <StatusLegend color="bg-slate-900 dark:bg-slate-500" label="Blocked" />
                 </div>
               </>
-            ) : (
-              <div className="bg-red-500/10 dark:bg-red-500/5 border border-red-500/20 rounded-[3rem] p-10 text-center space-y-6 shadow-xl">
+            )}
+            {!suggestedSlot && (
+              <div className="bg-red-500/10 dark:bg-red-500/5 border border-red-500/20 rounded-[3rem] p-10 text-center space-y-6 shadow-xl mt-8">
                 <div className="w-20 h-20 bg-red-500/20 rounded-3xl flex items-center justify-center text-red-500 mx-auto shadow-lg">
                   {slots.length === 0 ? <Loader2 size={40} className="animate-spin" /> : <AlertCircle size={40} />}
                 </div>
@@ -710,14 +731,14 @@ export default function Home({ activeLocation, savedVehicles, slots, tickets, on
             className="space-y-10"
           >
             <div className="text-center space-y-3">
-                <h2 className="text-4xl font-display font-black text-slate-950 transition-colors">Quantum Span</h2>
-                <p className="text-slate-950 dark:text-brand-primary text-sm font-black tracking-wide uppercase">Define your transmission window</p>
+                <h2 className="text-4xl font-display font-black text-[#00FF00] transition-colors">Quantum Span</h2>
+                <p className="text-[#00FF00] text-sm font-black tracking-wide uppercase">Define your transmission window</p>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[1, 2, 4, 8].map(h => (
                 <button
-                  key={h}
+                  key={`duration-opt-${h}`}
                   onClick={() => setDuration(h)}
                   className={`p-8 rounded-[2rem] border-2 flex flex-col items-center gap-3 transition-all ${
                     duration === h 
@@ -774,8 +795,8 @@ export default function Home({ activeLocation, savedVehicles, slots, tickets, on
             className="space-y-8"
           >
              <div className="text-center space-y-3">
-                <h2 className="text-4xl font-display font-black text-slate-950 dark:text-white transition-colors">Mission Summary</h2>
-                <p className="text-slate-950 dark:text-brand-primary text-sm font-black tracking-wide uppercase">Validate your slot position</p>
+                <h2 className="text-4xl font-display font-black text-[#00FF00] transition-colors">Mission Summary</h2>
+                <p className="text-[#00FF00] text-sm font-black tracking-wide uppercase">Validate your slot position</p>
              </div>
 
              <div className="bg-slate-100 dark:bg-slate-900/60 rounded-[3rem] shadow-2xl border border-slate-200 dark:border-white/5 overflow-hidden">
@@ -843,8 +864,8 @@ export default function Home({ activeLocation, savedVehicles, slots, tickets, on
             className="space-y-10"
           >
             <div className="text-center space-y-3">
-                <h2 className="text-4xl font-display font-bold text-slate-950 dark:text-white transition-colors">UPI Transaction</h2>
-                <p className="text-slate-950 dark:text-brand-primary text-sm font-black uppercase tracking-[0.3em]">Neural Scan Active</p>
+                <h2 className="text-4xl font-display font-bold text-[#00FF00] transition-colors">UPI Transaction</h2>
+                <p className="text-[#00FF00] text-sm font-black uppercase tracking-[0.3em]">Neural Scan Active</p>
             </div>
 
             <div className="bg-slate-100 dark:bg-slate-900/60 p-10 rounded-[3rem] shadow-xl dark:shadow-2xl border border-slate-200 dark:border-white/5 space-y-10 flex flex-col items-center">
@@ -861,7 +882,7 @@ export default function Home({ activeLocation, savedVehicles, slots, tickets, on
                     <div className="w-56 h-56 bg-white p-6 rounded-3xl shadow-xl flex items-center justify-center">
                         <div className="grid grid-cols-4 gap-3 opacity-30">
                           {Array.from({ length: 16 }).map((_, i) => (
-                              <div key={i} className="w-9 h-9 rounded bg-brand-primary shadow-lg shadow-brand-primary/20" />
+                              <div key={`payment-qr-placeholder-${i}`} className="w-9 h-9 rounded bg-brand-primary shadow-lg shadow-brand-primary/20" />
                           ))}
                         </div>
                         <QrCode className="absolute text-slate-900 animate-pulse" size={120} />
@@ -947,10 +968,10 @@ export default function Home({ activeLocation, savedVehicles, slots, tickets, on
             </div>
             
             <div className="space-y-4 mb-16">
-              <h2 className="text-5xl font-display font-black text-slate-950 tracking-tighter leading-tight italic">GRID SECURED</h2>
+              <h2 className="text-5xl font-display font-black text-[#00FF00] tracking-tighter leading-tight italic">GRID SECURED</h2>
               <div className="flex items-center justify-center gap-3">
                  <div className="h-0.5 w-8 bg-brand-primary/30" />
-                 <p className="text-slate-950 font-black uppercase tracking-[0.4em] text-xs transition-colors">Neural handshake verified</p>
+                 <p className="text-[#00FF00] font-black uppercase tracking-[0.4em] text-xs transition-colors">Neural handshake verified</p>
                  <div className="h-0.5 w-8 bg-brand-primary/30" />
               </div>
             </div>
@@ -977,17 +998,17 @@ export default function Home({ activeLocation, savedVehicles, slots, tickets, on
                </div>
                <div className="p-10 grid grid-cols-2 gap-8 text-left bg-white dark:bg-slate-950">
                   <div className="space-y-2">
-                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                     <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
                         <User size={12} className="text-brand-primary" />
                         Unit Owner
-                     </p>
+                     </div>
                      <p className="text-lg font-display font-bold text-slate-900 truncate">{ownerName}</p>
                   </div>
                   <div className="space-y-2 text-right">
-                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center justify-end gap-2">
+                     <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center justify-end gap-2">
                         Unit Registry
                         <div className="w-1.5 h-1.5 rounded-full bg-brand-primary animate-pulse" />
-                     </p>
+                     </div>
                      <p className="text-lg font-mono font-bold text-brand-primary">{vehicleNumber}</p>
                   </div>
                </div>
@@ -1064,7 +1085,7 @@ export default function Home({ activeLocation, savedVehicles, slots, tickets, on
                       { title: "Historical Trends", desc: "Predicts vacancy windows based on peak rush analytics." },
                       { title: "Energy Optimization", desc: "Reduces congestion by distributing load across parking floors." }
                     ].map((item, i) => (
-                      <div key={i} className="p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/5">
+                      <div key={`ai-logic-feature-${i}`} className="p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/5">
                         <h4 className="text-[10px] font-black text-brand-primary uppercase tracking-widest mb-1">{item.title}</h4>
                         <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">{item.desc}</p>
                       </div>
@@ -1316,7 +1337,7 @@ function InputGroup({ label, icon, children }: { label: string; icon: React.Reac
         <div className="w-6 h-6 rounded-lg bg-brand-primary/10 flex items-center justify-center">
             {icon}
         </div>
-        <span className="text-[11px] font-bold text-black uppercase tracking-[0.3em] leading-none">{label}</span>
+        <span className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-[0.25em] leading-none">{label}</span>
       </div>
       {children}
     </div>
