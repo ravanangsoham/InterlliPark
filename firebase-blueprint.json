@@ -1,0 +1,97 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account details and role.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "role"]
+    },
+    "Slot": {
+      "title": "Parking Slot",
+      "description": "State of an individual parking slot.",
+      "type": "object",
+      "properties": {
+        "locationId": { "type": "string" },
+        "floor": { "type": "number" },
+        "number": { "type": "string" },
+        "type": { "type": "string", "enum": ["Bike", "4-Wheeler", "Tempo", "Truck"] },
+        "status": { "type": "string", "enum": ["available", "reserved", "occupied", "blocked"] },
+        "currentBookingId": { "type": "string" }
+      },
+      "required": ["locationId", "floor", "number", "type", "status"]
+    },
+    "Booking": {
+      "title": "Parking Booking",
+      "description": "Record of a vehicle parking session.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "slotId": { "type": "string" },
+        "vehicleNumber": { "type": "string" },
+        "ownerName": { "type": "string" },
+        "phone": { "type": "string" },
+        "vehicleType": { "type": "string" },
+        "startTime": { "type": "string", "format": "date-time" },
+        "endTime": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["reserved", "active", "completed", "cancelled"] },
+        "paymentStatus": { "type": "string", "enum": ["pending", "paid"] },
+        "paymentMethod": { "type": "string", "enum": ["upi", "cash"] },
+        "totalAmount": { "type": "number" }
+      },
+      "required": ["userId", "slotId", "vehicleNumber", "vehicleType", "startTime", "status", "paymentStatus"]
+    },
+    "Vehicle": {
+      "title": "Saved Vehicle",
+      "description": "User's saved vehicle for quick booking.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "number": { "type": "string" },
+        "type": { "type": "string" },
+        "ownerName": { "type": "string" },
+        "phone": { "type": "string" }
+      },
+      "required": ["userId", "number", "type"]
+    },
+    "SupportMessage": {
+      "title": "Support Message",
+      "description": "Message in a support chat.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "text": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "isAdmin": { "type": "boolean" },
+        "userEmail": { "type": "string" }
+      },
+      "required": ["userId", "text", "timestamp", "isAdmin"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile documents."
+    },
+    "/slots/{slotId}": {
+      "schema": "Slot",
+      "description": "Parking slot documents."
+    },
+    "/bookings/{bookingId}": {
+      "schema": "Booking",
+      "description": "Booking documents."
+    },
+    "/vehicles/{vehicleId}": {
+      "schema": "Vehicle",
+      "description": "Saved vehicle documents."
+    },
+    "/support_messages/{messageId}": {
+      "schema": "SupportMessage",
+      "description": "Support chat messages."
+    }
+  }
+}

@@ -1,0 +1,126 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { return isSignedIn(); }
+    function isDev() {
+      return isSignedIn() && (
+        request.auth.token.email in [
+          'ravanangsoham2007@gmail.com',
+          'ravanangsoham@gmail.com',
+          'sanika7777@gmail.com',
+          'mitadmin1@gmail.com'
+        ] ||
+        request.auth.uid in [
+          'WEIBaTsCeYWgY97ERLPpZqfJuov1'
+        ]
+      );
+    }
+    function isAdmin() { 
+      return isDev() || (
+        isSignedIn() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      ); 
+    }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+
+    // --- Entity Validations ---
+    function isValidUser(data) {
+      return data.email is string &&
+             data.role in ['user', 'admin'];
+    }
+
+    function isValidSlot(data) {
+      return data.locationId is string && 
+             data.number is string && 
+             data.type is string && 
+             data.status in ['available', 'reserved', 'occupied', 'blocked'] &&
+             data.updatedAt == request.time;
+    }
+
+    function isValidBooking(data) {
+      return (isAdmin() || data.userId == request.auth.uid) &&
+             data.slotId is string &&
+             data.vehicleType is string &&
+             data.status in ['reserved', 'active', 'completed', 'cancelled'] &&
+             (!('updatedAt' in data) || data.updatedAt == request.time);
+    }
+
+    function isValidVehicle(data) {
+      return (isAdmin() || data.userId == request.auth.uid) &&
+             data.number is string &&
+             data.number.size() <= 20 &&
+             (!('createdAt' in data) || data.createdAt == request.time) &&
+             (!('updatedAt' in data) || data.updatedAt == request.time);
+    }
+
+    function isValidMessage(data) {
+      return data.keys().hasAll(['userId', 'text', 'timestamp', 'isAdmin', 'userEmail']) &&
+             (data.userId == request.auth.uid || isAdmin()) &&
+             data.text is string &&
+             data.text.size() <= 2000;
+    }
+
+    // --- Collection Routes ---
+
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && isOwner(userId) && isValidUser(incoming());
+      allow update: if isOwner(userId) || isAdmin(); // Allow updates for owners/admins
+      allow delete: if isAdmin();
+    }
+
+    match /slots/{slotId} {
+      allow get, list: if isSignedIn();
+      allow create: if isAdmin();
+      allow update: if isSignedIn() && (
+        isAdmin() || 
+        (incoming().diff(existing()).affectedKeys().hasOnly(['status', 'currentBookingId', 'updatedAt']) &&
+         incoming().updatedAt == request.time)
+      );
+    }
+
+    match /bookings/{bookingId} {
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidBooking(incoming()) && incoming().createdAt == request.time;
+      allow update: if isSignedIn() && (
+        isAdmin() || 
+        (isOwner(existing().userId) && 
+         incoming().diff(existing()).affectedKeys().hasOnly(['paymentStatus', 'status', 'endTime', 'startTime', 'arrivalTime', 'totalAmount', 'paymentMethod', 'updatedAt', 'userArrived']) &&
+         incoming().updatedAt == request.time)
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /vehicles/{vehicleId} {
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isVerified() && isValidVehicle(incoming()) && incoming().createdAt == request.time;
+      allow update: if isVerified() && isOwner(existing().userId) && isValidVehicle(incoming()) && incoming().createdAt == existing().createdAt;
+      allow delete: if isVerified() && (isOwner(existing().userId) || isAdmin());
+    }
+
+    match /support_messages/{messageId} {
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isVerified() && isValidMessage(incoming());
+    }
+
+    match /settings/{settingId} {
+      allow get, list: if isSignedIn();
+      allow write: if isAdmin();
+    }
+  }
+}

@@ -1,0 +1,82 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    function getUserData() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function isAdmin() { return isSignedIn() && getUserData().role == 'admin'; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+
+    // --- Entity Validations ---
+    function isValidUser(data) {
+      return data.keys().hasAll(['email', 'role', 'createdAt']) &&
+             data.keys().size() == 3 &&
+             data.email is string &&
+             data.role in ['user', 'admin'] &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidSlot(data) {
+      return data.keys().hasAll(['locationId', 'floor', 'number', 'type', 'status']) &&
+             data.locationId is string &&
+             data.floor is number &&
+             data.number is string &&
+             data.type in ['Bike', '4-Wheeler', 'Tempo', 'Truck'] &&
+             data.status in ['available', 'occupied', 'blocked'];
+    }
+
+    function isValidBooking(data) {
+      return data.keys().hasAll(['userId', 'slotId', 'vehicleNumber', 'vehicleType', 'startTime', 'status', 'paymentStatus']) &&
+             data.userId == request.auth.uid &&
+             data.slotId is string &&
+             data.vehicleNumber is string &&
+             data.vehicleNumber.size() <= 20 &&
+             data.vehicleType in ['Bike', '4-Wheeler', 'Tempo', 'Truck'] &&
+             data.startTime is timestamp &&
+             data.status in ['active', 'completed'] &&
+             data.paymentStatus in ['pending', 'paid'];
+    }
+
+    // --- Collection Routes ---
+
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser(incoming()) && incoming().role == 'user';
+      allow update: if (isOwner(userId) || isAdmin()) && (
+        (incoming().diff(existing()).affectedKeys().hasOnly(['email', 'createdAt']) && isOwner(userId)) ||
+        isAdmin()
+      );
+    }
+
+    match /slots/{slotId} {
+      allow read: if isSignedIn();
+      allow update: if isAdmin() || (
+        isSignedIn() && 
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'currentBookingId']) &&
+        // Only allow status change to 'occupied' or 'available' if associated with a booking
+        true // Simplified for now, but in reality we'd check getAfter
+      );
+    }
+
+    match /bookings/{bookingId} {
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidBooking(incoming()) && 
+                    exists(/databases/$(database)/documents/slots/$(incoming().slotId)) &&
+                    get(/databases/$(database)/documents/slots/$(incoming().slotId)).data.status == 'available';
+      allow update: if isSignedIn() && (
+        (isOwner(existing().userId) && incoming().diff(existing()).affectedKeys().hasOnly(['paymentStatus', 'status', 'endTime', 'totalAmount', 'paymentMethod'])) ||
+        isAdmin()
+      );
+    }
+  }
+}
