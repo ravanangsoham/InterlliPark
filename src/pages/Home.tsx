@@ -221,17 +221,9 @@ export default function Home({ activeLocation, savedVehicles, slots, tickets, on
         setSelectedSlot(best);
       } else {
         console.warn("No compatible slots found for:", { vehicleType, locationId: activeLocation.id });
-        // Force a slot for demo purposes
-        const pseudoSlot = {
-            id: 'demo-slot-1',
-            number: '99',
-            floor: 1,
-            type: vehicleType,
-            status: 'available',
-            locationId: activeLocation.id
-        } as Slot;
-        setSuggestedSlot(pseudoSlot);
-        setSelectedSlot(pseudoSlot);
+        setSuggestedSlot(null);
+        setSelectedSlot(null);
+        setError(`No available slots for ${vehicleType} in this location.`);
       }
       setAllocating(false);
       setStep('ai-allocation');
@@ -374,7 +366,7 @@ export default function Home({ activeLocation, savedVehicles, slots, tickets, on
     <motion.div 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="max-w-xl mx-auto space-y-10 pb-32"
+      className="w-full space-y-10 pb-32"
     >
       <header className="flex flex-col gap-6">
         <div className="flex items-center justify-between">
@@ -614,7 +606,7 @@ export default function Home({ activeLocation, savedVehicles, slots, tickets, on
               <>
                 <div className="bg-slate-100 dark:bg-slate-900/40 p-6 rounded-[3rem] border border-slate-200 dark:border-white/5 shadow-inner">
                    <div className="grid grid-cols-4 gap-4">
-                      {slots.filter(s => s.locationId === activeLocation.id && s.floor === activeFloor).map((slot, idx) => {
+                      {slots.filter(s => s.locationId === activeLocation.id && s.floor === activeFloor && s.type === vehicleType).map((slot, idx) => {
                         const isSuggested = suggestedSlot?.id === slot.id;
                         const isSelected = selectedSlot?.id === slot.id;
                         const isBlocked = ['blocked', 'maintenance', 'out_of_service'].includes(slot.status);
@@ -814,12 +806,12 @@ export default function Home({ activeLocation, savedVehicles, slots, tickets, on
                    <div className="h-px bg-white/5 w-full" />
 
                    <div className="grid grid-cols-2 gap-y-8">
-                      <DetailItemDark label="Registration" value={vehicleNumber} />
-                      <DetailItemDark label="Owner" value={ownerName} />
-                      <DetailItemDark label="Vehicle Type" value={vehicleType} />
-                      <DetailItemDark label="Duration" value={`${duration} ${duration === 1 ? 'Hour' : 'Hours'}`} />
-                      <DetailItemDark label="Booking Type" value={bookingType} />
-                      {bookingType === 'Pre-booking' && <DetailItemDark label="Arrival Time" value={arrivalTime} />}
+                      <DetailItemDark label="Registration" value={vehicleNumber} light={true} />
+                      <DetailItemDark label="Owner" value={ownerName} light={true} />
+                      <DetailItemDark label="Vehicle Type" value={vehicleType} light={true} />
+                      <DetailItemDark label="Duration" value={`${duration} ${duration === 1 ? 'Hour' : 'Hours'}`} light={true} />
+                      <DetailItemDark label="Booking Type" value={bookingType} light={true} />
+                      {bookingType === 'Pre-booking' && <DetailItemDark label="Arrival Time" value={arrivalTime} light={true} />}
                    </div>
 
                    <div className="p-8 bg-brand-primary/10 rounded-[2.5rem] flex justify-between items-center border border-brand-primary/10">

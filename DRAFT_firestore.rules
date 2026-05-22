@@ -61,7 +61,7 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow update: if isAdmin() || (
         isSignedIn() && 
-        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'currentBookingId']) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'currentBookingId', 'currentVehicleType']) &&
         // Only allow status change to 'occupied' or 'available' if associated with a booking
         true // Simplified for now, but in reality we'd check getAfter
       );

@@ -17,11 +17,11 @@ export default function Layout() {
         <div className="absolute top-[40%] -right-[10%] w-[30%] h-[30%] bg-brand-accent/5 rounded-full blur-[100px]" />
       </div>
 
-      <main className="flex-1 max-w-lg mx-auto w-full px-4 pt-8">
+      <main className="flex-1 max-w-7xl mx-auto w-full px-4 pt-8 pb-32">
         <Outlet />
       </main>
 
-      <nav className="fixed bottom-6 left-4 right-4 bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl rounded-[2.5rem] safe-bottom z-50 border border-slate-200 dark:border-white/5 flex justify-around py-4 px-2 shadow-2xl shadow-black/5 dark:shadow-black/50 transition-colors duration-300">
+      <nav className="fixed bottom-6 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-full sm:max-w-2xl bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl rounded-[3rem] safe-bottom z-50 border border-slate-200 dark:border-white/5 flex justify-around py-4 px-6 shadow-2xl shadow-black/5 dark:shadow-black/50 transition-colors duration-300">
         <NavItem to="/" icon={<Home size={22} />} label="Home" />
         <NavItem to="/locations" icon={<MapPin size={22} />} label="Detect" />
         <NavItem to="/history" icon={<Clock size={22} />} label="Activity" />

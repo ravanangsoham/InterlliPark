@@ -94,7 +94,7 @@ service cloud.firestore {
       allow create: if isAdmin();
       allow update: if isNotBlocked() && isSignedIn() && (
         isAdmin() || 
-        (incoming().diff(existing()).affectedKeys().hasOnly(['status', 'currentBookingId', 'updatedAt']) &&
+        (incoming().diff(existing()).affectedKeys().hasOnly(['status', 'currentBookingId', 'currentVehicleType', 'updatedAt']) &&
          incoming().updatedAt == request.time)
       );
     }
